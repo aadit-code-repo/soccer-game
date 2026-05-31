@@ -1,0 +1,3245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Soccer Simulator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0d1117;
+    color: #fff;
+    overflow: hidden;
+    user-select: none;
+  }
+  #game {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background:
+      repeating-linear-gradient(90deg,
+        #2d8a3e 0 80px, #2a8038 80px 160px);
+    overflow: hidden;
+  }
+  /* Field markings drawn via SVG overlay for accuracy */
+  #field-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  /* Goal posts */
+  .goal {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 200px;
+    background: rgba(255,255,255,0.95);
+    border: 2px solid #1a1a1a;
+    box-shadow: 0 0 10px rgba(0,0,0,0.4);
+    z-index: 2;
+  }
+  #goal-left { left: 0; border-radius: 0 4px 4px 0; }
+  #goal-right { right: 0; border-radius: 4px 0 0 4px; }
+  .goal-net {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 200px;
+    background:
+      repeating-linear-gradient(45deg, rgba(255,255,255,0.25) 0 2px, transparent 2px 8px),
+      repeating-linear-gradient(-45deg, rgba(255,255,255,0.25) 0 2px, transparent 2px 8px);
+    z-index: 1;
+  }
+  #net-left { left: 0; }
+  #net-right { right: 0; }
+
+  /* entities */
+  .entity {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    transition: filter 0.1s;
+  }
+  /* Pro soccer player avatar — more detailed, more human */
+  .player-body {
+    width: 50px;
+    height: 72px;
+    position: relative;
+    filter: drop-shadow(0 6px 5px rgba(0,0,0,0.55));
+  }
+  .player-body > div {
+    position: absolute;
+    border: 1.2px solid rgba(0,0,0,0.55);
+    box-sizing: border-box;
+  }
+  /* NECK: small skin strip between head and torso */
+  .player-body::before {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 6px;
+    background: #d8a974;
+    border: 1.2px solid rgba(0,0,0,0.55);
+    border-radius: 2px;
+    left: 50%;
+    top: 22px;
+    transform: translateX(-50%);
+    z-index: 4;
+    box-shadow: inset -2px 0 0 rgba(0,0,0,0.18);
+  }
+  /* HEAD: skin-toned, slight oval (humans aren't perfect circles) */
+  .player-body .head {
+    width: 20px;
+    height: 22px;
+    background-color: #e8b88a;
+    background-image:
+      radial-gradient(circle at 70% 60%, rgba(0,0,0,0.18) 0%, transparent 55%),
+      radial-gradient(circle at 30% 30%, rgba(255,255,255,0.30) 0%, transparent 50%);
+    border-radius: 45% 45% 48% 48% / 55% 55% 45% 45%;
+    left: 50%;
+    top: 2px;
+    transform: translateX(-50%);
+    z-index: 5;
+  }
+  /* EARS: small skin tabs poking out the sides */
+  .player-body .head::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -3px;
+    right: -3px;
+    height: 4px;
+    transform: translateY(-50%);
+    background:
+      radial-gradient(circle at left,  #d8a974 0 2.5px, transparent 2.5px),
+      radial-gradient(circle at right, #d8a974 0 2.5px, transparent 2.5px);
+    z-index: -1;
+  }
+  /* HAIR: short fade cut, sits on top of the head */
+  .player-body .hair {
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 11px;
+    background: #2b1d12;
+    border-radius: 60% 60% 35% 35% / 80% 80% 35% 35%;
+    border: 1.2px solid rgba(0,0,0,0.55);
+    border-bottom: none;
+    z-index: 6;
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.25), inset 2px 1px 0 rgba(255,255,255,0.06);
+  }
+  /* FACE: realistic — brows, almond eyes with iris+pupil+highlight, nose shadow, lips */
+  .player-body .face {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 22'><g><path d='M 4.5 9.5 Q 7 8.6 9 9.6' stroke='%23211309' stroke-width='1.2' stroke-linecap='round' fill='none'/><path d='M 15.5 9.5 Q 13 8.6 11 9.6' stroke='%23211309' stroke-width='1.2' stroke-linecap='round' fill='none'/><ellipse cx='6.8' cy='11.6' rx='1.5' ry='1.1' fill='white' stroke='%23211309' stroke-width='0.5'/><ellipse cx='13.2' cy='11.6' rx='1.5' ry='1.1' fill='white' stroke='%23211309' stroke-width='0.5'/><circle cx='6.8' cy='11.7' r='0.85' fill='%234a3422'/><circle cx='13.2' cy='11.7' r='0.85' fill='%234a3422'/><circle cx='6.8' cy='11.7' r='0.42' fill='%23000'/><circle cx='13.2' cy='11.7' r='0.42' fill='%23000'/><circle cx='7.1' cy='11.4' r='0.18' fill='white'/><circle cx='13.5' cy='11.4' r='0.18' fill='white'/><path d='M 9.6 12.5 Q 9.3 14 10 15' stroke='%23a86c3a' stroke-width='0.55' stroke-linecap='round' fill='none' opacity='0.7'/><path d='M 9.5 16 Q 10 16.6 10.7 16' stroke='%23a04040' stroke-width='0.45' fill='%23c25555' stroke-linejoin='round'/><path d='M 8.4 16 Q 10 16.9 11.6 16' stroke='%23211309' stroke-width='0.6' stroke-linecap='round' fill='none'/><path d='M 6 9.5 Q 5 10.5 5.5 11.5' stroke='%23211309' stroke-width='0.4' fill='none' opacity='0.5'/><path d='M 14 9.5 Q 15 10.5 14.5 11.5' stroke='%23211309' stroke-width='0.4' fill='none' opacity='0.5'/></g></svg>");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    pointer-events: none;
+  }
+  /* JERSEY: athletic torso with shoulder taper */
+  .player-body .torso {
+    width: 36px;
+    height: 26px;
+    border-radius: 10px 10px 4px 4px;
+    background-image:
+      linear-gradient(180deg, transparent 0%, transparent 16%, rgba(0,0,0,0.32) 16%, rgba(0,0,0,0.32) 20%, transparent 20%),
+      radial-gradient(ellipse at 50% 0%, rgba(0,0,0,0.30) 0 5px, transparent 6px),
+      linear-gradient(90deg, rgba(255,255,255,0.14) 0%, transparent 25%, transparent 75%, rgba(0,0,0,0.22) 100%);
+    left: 50%;
+    top: 26px;
+    transform: translateX(-50%);
+    z-index: 3;
+  }
+  /* Jersey number on the back */
+  .player-body .torso::after {
+    content: '10';
+    position: absolute;
+    top: 56%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.6);
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    line-height: 1;
+    letter-spacing: -0.5px;
+  }
+  /* ARMS: skin biceps + forearm visible, shorter sleeve cap */
+  .player-body .arm {
+    width: 8px;
+    height: 26px;
+    border-radius: 3px 3px 5px 5px;
+    background-image:
+      linear-gradient(180deg, rgba(0,0,0,0.0) 0% 8px, var(--skin, #e8b88a) 8px 100%),
+      linear-gradient(90deg, rgba(255,255,255,0.14) 0%, transparent 50%, rgba(0,0,0,0.25) 100%);
+    background-color: #e8b88a;
+    top: 27px;
+    z-index: 2;
+  }
+  .player-body .arm-left  { left: 1px; }
+  .player-body .arm-right { right: 1px; }
+  /* Sleeve cap in jersey color (top portion of arm) */
+  .player-body .arm::before {
+    content: '';
+    position: absolute;
+    top: -1.5px; left: -1.5px; right: -1.5px;
+    height: 11px;
+    background-color: #888;
+    border: 1.2px solid rgba(0,0,0,0.55);
+    border-radius: 3px 3px 1px 1px;
+  }
+  /* Hands at the bottom of the arm */
+  .player-body .arm::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: -1px;
+    right: -1px;
+    height: 4px;
+    background: #d8a974;
+    border: 1px solid rgba(0,0,0,0.55);
+    border-radius: 50%;
+  }
+  /* SHORTS: more athletic shape, slight inseam shadow */
+  .player-body .shorts {
+    width: 32px;
+    height: 14px;
+    background-color: #fff;
+    background-image:
+      linear-gradient(90deg, transparent 47%, rgba(0,0,0,0.30) 49%, rgba(0,0,0,0.30) 51%, transparent 53%),
+      linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.10) 100%),
+      linear-gradient(90deg, rgba(255,255,255,0.20) 0%, transparent 50%, rgba(0,0,0,0.18) 100%);
+    border-radius: 2px 2px 7px 7px;
+    left: 50%;
+    top: 51px;
+    transform: translateX(-50%);
+    z-index: 3;
+  }
+  /* SOCKS: white with team-color stripe */
+  .player-body .leg {
+    width: 11px;
+    height: 16px;
+    background-color: #fff;
+    background-image:
+      linear-gradient(180deg, #fff 0% 4px, var(--sock-band, transparent) 4px 6px, #fff 6px 60%, #1e1e1e 60% 100%);
+    border-radius: 2px 2px 4px 4px;
+    top: 62px;
+    z-index: 2;
+  }
+  .player-body .leg-left  { left: 9px; }
+  .player-body .leg-right { right: 9px; }
+  /* CLEATS: black bulge at bottom with a small lighter sole */
+  .player-body .leg::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: -3px;
+    right: -3px;
+    height: 6px;
+    background:
+      linear-gradient(180deg, #111 0 4px, #444 4px 100%);
+    border-radius: 30% 50% 50% 50% / 50% 50% 80% 80%;
+    border: 1.2px solid rgba(0,0,0,0.7);
+  }
+
+  /* Per-team sleeve cap matches jersey */
+  #player    .arm::before { background-color: #1e88e5; }
+  #you-mid   .arm::before { background-color: #64b5f6; }
+  #cpu-striker .arm::before { background-color: #c62828; }
+  #cpu-mid     .arm::before { background-color: #d32f2f; }
+  .keeper    .arm::before { background-color: #f57c00; }
+  #ref       .arm::before { background-color: #fafafa; }
+
+  /* Per-player jersey numbers */
+  #player    .torso::after { content: '9'; }
+  #you-mid   .torso::after { content: '8'; }
+  #keeper-you .torso::after { content: '1'; }
+  #cpu-striker .torso::after { content: '9'; }
+  #cpu-mid     .torso::after { content: '8'; }
+  #keeper-cpu .torso::after { content: '1'; }
+  #ref       .torso::after { content: ''; }
+
+  .indicator {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 4px #000, 0 1px 2px #000;
+    white-space: nowrap;
+    z-index: 5;
+  }
+
+  /* === FRANCE kit (your team) — Royal blue, white shorts, red socks === */
+  #player    .torso { background-color: #1d3a8a; }
+  #you-mid   .torso { background-color: #1d3a8a; }
+  #keeper-you .torso { background-color: #ffeb3b; } /* GK alt yellow */
+  #player    .arm::before, #you-mid .arm::before { background-color: #1d3a8a; }
+  #keeper-you .arm::before { background-color: #ffeb3b; }
+  /* France shorts: white */
+  #player .shorts, #you-mid .shorts { background-color: #f5f5f5; }
+  #keeper-you .shorts { background-color: #1a1a1a; }
+  /* France socks: red */
+  #player .leg, #you-mid .leg {
+    background-image: linear-gradient(180deg, #d22030 0% 4px, #ffffff 4px 6px, #d22030 6px 60%, #1e1e1e 60% 100%);
+  }
+
+  /* === SPAIN kit (CPU) — Red shirt with gold trim, blue shorts, blue socks === */
+  #cpu-striker .torso,
+  #cpu-mid     .torso {
+    background-color: #c1112f;
+    background-image:
+      linear-gradient(180deg, #c1112f 0% 35%, #f4c542 35% 38%, #c1112f 38% 100%),
+      linear-gradient(90deg, rgba(255,255,255,0.10) 0%, transparent 25%, transparent 75%, rgba(0,0,0,0.20) 100%);
+  }
+  #cpu-striker .arm::before, #cpu-mid .arm::before { background-color: #c1112f; }
+  #keeper-cpu  .torso { background-color: #f4c542; } /* gold GK */
+  #keeper-cpu  .arm::before { background-color: #f4c542; }
+  /* Spain shorts: navy blue */
+  #cpu-striker .shorts, #cpu-mid .shorts { background-color: #1d3a8a; }
+  #keeper-cpu  .shorts { background-color: #1a1a1a; }
+  /* Spain socks: navy with gold band */
+  #cpu-striker .leg, #cpu-mid .leg {
+    background-image: linear-gradient(180deg, #1d3a8a 0% 4px, #f4c542 4px 6px, #1d3a8a 6px 60%, #1e1e1e 60% 100%);
+  }
+  /* Spain jersey number: gold for contrast on red */
+  #cpu-striker .torso::after, #cpu-mid .torso::after {
+    color: #f4c542;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.6);
+  }
+
+  /* Ref: black & white vertical stripes */
+  #ref .torso {
+    background: repeating-linear-gradient(90deg, #111 0 4px, #fafafa 4px 8px);
+  }
+  #ref .shorts { background-color: #111; }
+  #ref .leg { background: #111; }
+
+  /* Tackling: lean forward + glow */
+  #player.tackling .player-body {
+    filter: drop-shadow(0 0 12px #ff5722) drop-shadow(0 5px 4px rgba(0,0,0,0.55));
+    transform: scale(1.05) rotate(-12deg);
+  }
+  /* Bicycle kick spin — slower, bigger, with motion-trail glow */
+  #player.bicycling .player-body {
+    animation: bicycleSpin 0.9s cubic-bezier(.25,.7,.4,1);
+    filter:
+      drop-shadow(0 0 18px #ff9800)
+      drop-shadow(0 0 30px #ff5722)
+      drop-shadow(0 5px 4px rgba(0,0,0,0.55));
+  }
+  @keyframes bicycleSpin {
+    0%   { transform: rotate(0deg)    scale(1)   translateY(0); }
+    25%  { transform: rotate(-90deg)  scale(1.15) translateY(-4px); }
+    50%  { transform: rotate(-180deg) scale(1.3)  translateY(-8px); }
+    75%  { transform: rotate(-270deg) scale(1.15) translateY(-4px); }
+    100% { transform: rotate(-360deg) scale(1)   translateY(0); }
+  }
+  /* Speed-trail when bicycling (like a streak in the direction of motion) */
+  #player.bicycling::before {
+    content: '';
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 80px; height: 14px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(255,235,59,0.55) 0%, rgba(255,87,34,0) 70%);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 0;
+    animation: bicycleTrail 0.9s ease-out;
+  }
+  @keyframes bicycleTrail {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scaleX(0.4); }
+    50%  { opacity: 1; transform: translate(-50%, -50%) scaleX(1.4); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scaleX(2); }
+  }
+  /* CPU tackle visual */
+  #cpu-striker.tackling .player-body,
+  #cpu-mid.tackling .player-body {
+    filter: drop-shadow(0 0 12px #ff5722) drop-shadow(0 5px 4px rgba(0,0,0,0.55));
+    transform: scale(1.05) rotate(12deg);
+  }
+  /* Cards above head */
+  .card-stack {
+    position: absolute;
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 2px;
+    z-index: 6;
+  }
+  .card-stack .card {
+    width: 8px;
+    height: 11px;
+    border: 1px solid #000;
+    border-radius: 1px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .card.yellow { background: #ffeb3b; }
+  .card.red { background: #e53935; }
+  /* Sent-off player */
+  #player.sent-off .player-body,
+  #cpu-striker.sent-off .player-body,
+  #cpu-mid.sent-off .player-body {
+    filter: grayscale(1) brightness(0.6);
+    opacity: 0.6;
+  }
+  /* Possession ring — appears under the player when carrying the ball */
+  .possession-ring {
+    position: absolute;
+    left: 50%;
+    top: 78%;
+    width: 56px;
+    height: 22px;
+    border-radius: 50%;
+    border: 3px solid #4da6ff;
+    background: radial-gradient(ellipse at center, rgba(77,166,255,0.25) 0%, rgba(77,166,255,0) 70%);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 12px rgba(77,166,255,0.7);
+    pointer-events: none;
+    display: none;
+    z-index: 1;
+    animation: ringpulse 1.2s ease-in-out infinite;
+  }
+  #player.has-ball .possession-ring { display: block; }
+  @keyframes ringpulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(1);   opacity: 0.95; }
+    50%      { transform: translate(-50%, -50%) scale(1.12); opacity: 0.7; }
+  }
+
+  /* Power-up effects */
+  #player.boost .player-body {
+    filter: drop-shadow(0 0 8px #ffeb3b) drop-shadow(0 5px 4px rgba(0,0,0,0.55));
+  }
+  .diving .player-body {
+    filter: drop-shadow(0 0 10px #ffeb3b) drop-shadow(0 5px 4px rgba(0,0,0,0.55));
+    transform: scale(1.12);
+  }
+
+  #ball {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    background:
+      radial-gradient(circle at 30% 30%, #fff, #ddd);
+    border: 1.5px solid #222;
+    border-radius: 50%;
+    transform: translate(-50%, -50%) rotate(0deg);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.5);
+    z-index: 6;
+  }
+  #ball::before, #ball::after {
+    content: '';
+    position: absolute;
+    background: #222;
+  }
+  #ball::before {
+    top: 50%; left: 10%; right: 10%; height: 2px; transform: translateY(-50%);
+  }
+  #ball::after {
+    left: 50%; top: 10%; bottom: 10%; width: 2px; transform: translateX(-50%);
+  }
+
+  .ball-shadow {
+    position: absolute;
+    width: 22px;
+    height: 8px;
+    background: rgba(0,0,0,0.35);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    filter: blur(2px);
+  }
+
+  /* HUD */
+  #hud {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 20;
+  }
+  .hud-panel {
+    background: rgba(0,0,0,0.6);
+    padding: 10px 16px;
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    pointer-events: auto;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  #score { font-size: 28px; font-weight: 800; letter-spacing: 1px; }
+  #score .you { color: #4da6ff; }
+  #score .cpu { color: #ff6b6b; }
+  #score .timer { color: #fff; font-size: 16px; opacity: 0.85; margin-left: 12px; }
+  #stats { font-size: 13px; line-height: 1.65; }
+  #stats .label { opacity: 0.65; }
+  #stats .coins { color: #ffeb3b; font-weight: 700; }
+  #stats .gems  { color: #00e5ff; font-weight: 700; text-shadow: 0 0 6px rgba(0,229,255,0.5); }
+  /* VIP Aura — golden glow around player */
+  #player.vip .player-body {
+    filter: drop-shadow(0 0 14px #ffd700) drop-shadow(0 6px 5px rgba(0,0,0,0.55));
+  }
+  /* Premium pass styling */
+  .pass.premium {
+    background: linear-gradient(135deg, #1a237e, #4a148c);
+    border: 1px solid rgba(0,229,255,0.4);
+    position: relative;
+  }
+  .pass.premium::before {
+    content: 'PREMIUM';
+    position: absolute;
+    top: 6px; right: 8px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: #00e5ff;
+    font-weight: 800;
+    background: rgba(0,229,255,0.12);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .pass.premium .pass-buy { background: linear-gradient(180deg, #00e5ff, #0288d1); }
+  .pass.premium .pass-buy:hover:not(:disabled) { background: linear-gradient(180deg, #00b8d4, #01579b); }
+  .pass.premium .pass-buy.owned { background: #ffd700; color: #222; }
+  .shop-divider {
+    text-align: center;
+    margin: 18px 0 10px;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: #00e5ff;
+    border-top: 1px solid rgba(0,229,255,0.25);
+    padding-top: 10px;
+  }
+
+  /* Power meter */
+  #power-meter {
+    position: absolute;
+    bottom: 130px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 12px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.3);
+    display: none;
+    z-index: 20;
+  }
+  #power-meter.show { display: block; }
+  #power-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #4caf50, #ffeb3b, #ff5722);
+    transition: width 0.05s linear;
+  }
+
+  /* Controls hint */
+  #controls-hint {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(0,0,0,0.6);
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    z-index: 20;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  #controls-hint kbd {
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: monospace;
+    font-size: 12px;
+  }
+
+  /* Shop button */
+  #shop-btn {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    background: linear-gradient(180deg, #ffd54f, #ffa000);
+    color: #222;
+    border: none;
+    padding: 12px 22px;
+    font-size: 16px;
+    font-weight: 800;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    z-index: 20;
+  }
+  #shop-btn:hover { transform: translateY(-2px); }
+  /* Anti-tackle shield button */
+  #shield-btn {
+    position: absolute;
+    top: 110px;
+    right: 12px;
+    width: 56px;
+    height: 56px;
+    background: rgba(0,0,0,0.55);
+    border: 2px solid #4da6ff;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+    z-index: 20;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s;
+  }
+  #shield-btn:hover { transform: scale(1.05); }
+  #shield-btn.on {
+    background: linear-gradient(180deg, #4da6ff, #1976d2);
+    box-shadow: 0 0 24px #4da6ff, 0 4px 12px rgba(0,0,0,0.5);
+    border-color: #fff;
+  }
+  /* Visible shield aura around player when active */
+  #player.shielded .player-body {
+    filter:
+      drop-shadow(0 0 14px #4da6ff)
+      drop-shadow(0 0 24px rgba(77,166,255,0.6))
+      drop-shadow(0 6px 5px rgba(0,0,0,0.55)) !important;
+  }
+  #player.shielded::before {
+    content: '';
+    position: absolute;
+    left: 50%; top: 55%;
+    width: 70px; height: 70px;
+    border-radius: 50%;
+    border: 2px solid rgba(77,166,255,0.8);
+    background: radial-gradient(circle, rgba(77,166,255,0.18) 0%, rgba(77,166,255,0) 70%);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: -1;
+    animation: shieldPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes shieldPulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(1);    opacity: 1; }
+    50%      { transform: translate(-50%, -50%) scale(1.12); opacity: 0.55; }
+  }
+  /* Claim gift button */
+  #claim-btn {
+    position: absolute;
+    bottom: 12px;
+    right: 184px;
+    background: linear-gradient(180deg, #66bb6a, #2e7d32);
+    color: #fff;
+    border: none;
+    padding: 12px 18px;
+    font-size: 15px;
+    font-weight: 800;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 0 18px rgba(255,235,59,0.4);
+    z-index: 20;
+    animation: claimPulse 1.4s ease-in-out infinite;
+  }
+  #claim-btn:hover { transform: translateY(-2px); }
+  #claim-btn.claimed { display: none; }
+  @keyframes claimPulse {
+    0%, 100% { box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 0 18px rgba(255,235,59,0.4); }
+    50%      { box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 0 28px rgba(255,235,59,0.9); }
+  }
+  /* Fullscreen button */
+  #fs-btn {
+    position: absolute;
+    bottom: 12px;
+    right: 130px;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 18px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  #fs-btn:hover { background: rgba(0,0,0,0.75); }
+
+  /* Shop modal */
+  #shop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.78);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    backdrop-filter: blur(6px);
+  }
+  #shop.open { display: flex; }
+  .shop-card {
+    background: #16213e;
+    border-radius: 16px;
+    padding: 24px;
+    width: min(580px, 92vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .shop-card h2 {
+    text-align: center;
+    margin-bottom: 4px;
+    font-size: 26px;
+  }
+  .shop-card .sub {
+    text-align: center;
+    color: #ffeb3b;
+    margin-bottom: 18px;
+    font-weight: 600;
+  }
+  .pass {
+    background: #0f3460;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .pass-info h3 { font-size: 16px; margin-bottom: 2px; }
+  .pass-info p { font-size: 13px; opacity: 0.8; }
+  .pass-buy {
+    background: #4da6ff;
+    border: none;
+    color: #fff;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    min-width: 90px;
+  }
+  .pass-buy:hover:not(:disabled) { background: #1e88e5; }
+  .pass-buy:disabled { background: #444; cursor: not-allowed; }
+  .pass-buy.owned { background: #4caf50; }
+  #close-shop {
+    width: 100%;
+    margin-top: 8px;
+    background: #444;
+    color: #fff;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #close-shop:hover { background: #555; }
+
+  /* Shootout scoreboard */
+  #shootout-panel {
+    position: absolute;
+    top: 64px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 10px 16px;
+    display: none;
+    z-index: 30;
+    backdrop-filter: blur(6px);
+  }
+  #shootout-panel.show { display: block; }
+  #shootout-panel .so-title {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: rgba(255,255,255,0.6);
+    text-align: center;
+    margin-bottom: 6px;
+  }
+  .so-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 13px; font-weight: 700; }
+  .so-label { width: 44px; }
+  .so-label.you { color: #4da6ff; }
+  .so-label.cpu { color: #ff6b6b; }
+  .so-dots { display: flex; gap: 5px; }
+  .so-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.05);
+  }
+  .so-dot.goal { background: #4caf50; border-color: #2e7d32; }
+  .so-dot.miss { background: #e53935; border-color: #b71c1c; }
+  .so-dot.next { border-color: #ffeb3b; box-shadow: 0 0 8px #ffeb3b; }
+
+  /* Team picker overlay */
+  #team-picker {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 300;
+    backdrop-filter: blur(8px);
+  }
+  #team-picker.hide { display: none; }
+  .tp-card {
+    background: linear-gradient(180deg, #16213e, #0f3460);
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 18px;
+    padding: 32px;
+    text-align: center;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  }
+  .tp-card h2 {
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: rgba(255,255,255,0.65);
+    margin-bottom: 6px;
+  }
+  .tp-card .tp-vs { font-size: 28px; font-weight: 900; margin-bottom: 24px; letter-spacing: 2px; }
+  .tp-options { display: flex; gap: 18px; }
+  .tp-team {
+    cursor: pointer;
+    background: #0a1a2f;
+    border: 3px solid transparent;
+    border-radius: 12px;
+    padding: 18px 22px;
+    width: 180px;
+    transition: transform 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .tp-team:hover { transform: translateY(-3px); }
+  .tp-team .flag {
+    height: 80px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(0,0,0,0.5);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+  }
+  .tp-team .name { font-size: 20px; font-weight: 900; letter-spacing: 1px; }
+  .tp-team[data-team="argentina"]:hover { border-color: #75aadb; background: #1a3550; }
+  .tp-team[data-team="portugal"]:hover  { border-color: #a3132c; background: #4a1320; }
+  /* Argentina flag: light-blue / white / light-blue with sun */
+  .flag.argentina {
+    background:
+      radial-gradient(circle at center, #f4c542 0 8px, transparent 9px),
+      linear-gradient(180deg, #75aadb 0 33.3%, #ffffff 33.3% 66.6%, #75aadb 66.6% 100%);
+  }
+  /* Portugal flag: green / red vertical */
+  .flag.portugal {
+    background: linear-gradient(90deg, #1c5b2c 0 40%, #a3132c 40% 100%);
+  }
+
+  /* Full-time overlay */
+  #fulltime {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 200;
+    backdrop-filter: blur(6px);
+  }
+  #fulltime.show { display: flex; }
+  .ft-card {
+    background: linear-gradient(180deg, #16213e, #0f3460);
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 18px;
+    padding: 32px 40px;
+    text-align: center;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+    min-width: 340px;
+    animation: ftpop 0.4s cubic-bezier(.2,1.4,.6,1);
+  }
+  @keyframes ftpop {
+    0%   { transform: scale(0.6); opacity: 0; }
+    100% { transform: scale(1);   opacity: 1; }
+  }
+  .ft-label {
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 8px;
+  }
+  .ft-result {
+    font-size: 56px;
+    font-weight: 900;
+    margin-bottom: 14px;
+    letter-spacing: 2px;
+    text-shadow: 0 4px 0 rgba(0,0,0,0.4);
+  }
+  .ft-result.win  { color: #4caf50; }
+  .ft-result.loss { color: #ff5252; }
+  .ft-result.draw { color: #ffeb3b; }
+  .ft-score {
+    font-size: 36px;
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+  .ft-score .you { color: #4da6ff; }
+  .ft-score .cpu { color: #ff6b6b; }
+  .ft-coins {
+    font-size: 14px;
+    color: #ffeb3b;
+    margin-bottom: 22px;
+  }
+  #ft-replay {
+    background: linear-gradient(180deg, #66bb6a, #2e7d32);
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    font-size: 16px;
+    font-weight: 800;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    letter-spacing: 1px;
+  }
+  #ft-replay:hover { transform: translateY(-2px); }
+
+  /* === GOAL CELEBRATION === */
+  /* Celebrating player: bounce + glow + arm raise illusion via scale */
+  .entity.celebrating .player-body {
+    animation: celebrateBounce 0.45s ease-in-out infinite alternate;
+    filter: drop-shadow(0 0 14px #ffeb3b) drop-shadow(0 6px 5px rgba(0,0,0,0.55));
+  }
+  @keyframes celebrateBounce {
+    0%   { transform: translateY(0)    scale(1); }
+    100% { transform: translateY(-14px) scale(1.06); }
+  }
+  /* Arms raised when celebrating */
+  .entity.celebrating .arm-left  { transform-origin: top center; animation: armUpL 0.6s ease-in-out infinite alternate; }
+  .entity.celebrating .arm-right { transform-origin: top center; animation: armUpR 0.6s ease-in-out infinite alternate; }
+  @keyframes armUpL { 0% { transform: rotate(0); } 100% { transform: rotate(160deg); } }
+  @keyframes armUpR { 0% { transform: rotate(0); } 100% { transform: rotate(-160deg); } }
+
+  /* === SIUUU celebration (Ronaldo) === */
+  #player.siu .player-body {
+    animation: siuFlip 1.8s cubic-bezier(.3,.7,.4,1.3) forwards !important;
+    filter: drop-shadow(0 0 22px #ffd700)
+            drop-shadow(0 0 10px #fff)
+            drop-shadow(0 6px 5px rgba(0,0,0,0.55)) !important;
+  }
+  @keyframes siuFlip {
+    0%   { transform: translateY(0)     rotate(0deg)   scale(1); }
+    18%  { transform: translateY(-50px) rotate(120deg) scale(1.05); }
+    36%  { transform: translateY(-95px) rotate(360deg) scale(1.10); }
+    55%  { transform: translateY(-95px) rotate(360deg) scale(1.20); }
+    72%  { transform: translateY(-30px) rotate(360deg) scale(1.18); }
+    100% { transform: translateY(0)     rotate(360deg) scale(1.12); }
+  }
+  /* Arms held wide out at the apex (Ronaldo pose) */
+  #player.siu .arm-left  {
+    transform-origin: top center;
+    animation: siuArmL 1.8s ease-out forwards !important;
+  }
+  #player.siu .arm-right {
+    transform-origin: top center;
+    animation: siuArmR 1.8s ease-out forwards !important;
+  }
+  @keyframes siuArmL {
+    0%  { transform: rotate(0); }
+    50%, 100% { transform: rotate(115deg); }
+  }
+  @keyframes siuArmR {
+    0%  { transform: rotate(0); }
+    50%, 100% { transform: rotate(-115deg); }
+  }
+  /* Brief shockwave ring at takeoff */
+  #player.siu::after {
+    content: '';
+    position: absolute;
+    left: 50%; top: 88%;
+    width: 30px; height: 30px;
+    border: 3px solid #ffd700;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 0;
+    animation: siuRing 1.2s ease-out forwards;
+  }
+  @keyframes siuRing {
+    0%   { opacity: 0.9; transform: translate(-50%, -50%) scale(0.4); }
+    100% { opacity: 0;   transform: translate(-50%, -50%) scale(4); }
+  }
+
+  /* Confetti particle */
+  .confetti {
+    position: absolute;
+    width: 8px;
+    height: 12px;
+    border-radius: 1px;
+    z-index: 80;
+    pointer-events: none;
+    animation: confettiFly 1.4s ease-out forwards;
+    will-change: transform, opacity;
+  }
+  @keyframes confettiFly {
+    0%   { transform: translate(0, 0) rotate(0); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; }
+  }
+  /* Score pulse on the HUD */
+  #score.score-pulse { animation: scorePulse 0.8s ease-out; }
+  @keyframes scorePulse {
+    0%   { transform: scale(1); }
+    30%  { transform: scale(1.25); filter: drop-shadow(0 0 12px #ffeb3b); }
+    100% { transform: scale(1); }
+  }
+  /* Screen flash overlay */
+  #screen-flash {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0);
+    pointer-events: none;
+    z-index: 90;
+    transition: background 0.1s linear;
+  }
+  #screen-flash.flash {
+    animation: screenFlash 0.6s ease-out;
+  }
+  @keyframes screenFlash {
+    0%   { background: var(--flash-color, rgba(255,255,255,0.5)); }
+    100% { background: rgba(255,255,255,0); }
+  }
+
+  /* Goal banner */
+  #goal-banner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    font-size: 96px;
+    font-weight: 900;
+    text-shadow: 0 0 20px #000, 0 4px 0 rgba(0,0,0,0.5);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 50;
+    letter-spacing: 6px;
+    transition: transform 0.3s, opacity 0.3s;
+  }
+  #goal-banner.show {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+
+  /* Mobile controls */
+  #mobile-controls {
+    display: none;
+    position: absolute;
+    bottom: 80px;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    pointer-events: none;
+  }
+  #joystick {
+    position: absolute;
+    left: 30px;
+    bottom: 0;
+    width: 120px;
+    height: 120px;
+    background: rgba(0,0,0,0.3);
+    border: 2px solid rgba(255,255,255,0.4);
+    border-radius: 50%;
+    pointer-events: auto;
+    touch-action: none;
+  }
+  #joystick-knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 50px;
+    height: 50px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+  #kick-btn {
+    position: absolute;
+    right: 30px;
+    bottom: 0;
+    width: 100px;
+    height: 100px;
+    background: rgba(255,107,107,0.7);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    color: #fff;
+    font-weight: 700;
+    font-size: 18px;
+    pointer-events: auto;
+    touch-action: none;
+  }
+  @media (hover: none) and (pointer: coarse) {
+    #mobile-controls { display: block; }
+    #controls-hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <!-- Field markings -->
+  <svg id="field-svg" preserveAspectRatio="none">
+    <!-- Outer touchline -->
+    <rect x="14" y="14" width="100%" height="100%" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="3" id="svg-outer"/>
+    <!-- Halfway line -->
+    <line id="svg-half" x1="50%" y1="14" x2="50%" y2="100%" stroke="rgba(255,255,255,0.85)" stroke-width="3"/>
+    <!-- Center circle -->
+    <circle id="svg-center" cx="50%" cy="50%" r="80" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="3"/>
+    <circle cx="50%" cy="50%" r="3" fill="rgba(255,255,255,0.85)"/>
+    <!-- Penalty boxes (drawn via JS for sizing) -->
+    <g id="svg-boxes" stroke="rgba(255,255,255,0.85)" stroke-width="3" fill="none"></g>
+  </svg>
+
+  <!-- Nets behind goals -->
+  <div class="goal-net" id="net-left"></div>
+  <div class="goal-net" id="net-right"></div>
+
+  <!-- Goal posts -->
+  <div class="goal" id="goal-left"></div>
+  <div class="goal" id="goal-right"></div>
+
+  <!-- Ball + shadow -->
+  <div class="ball-shadow" id="ball-shadow"></div>
+  <div id="ball"></div>
+
+  <!-- Players -->
+  <div class="entity" id="player">
+    <div class="indicator">CF</div>
+    <div class="card-stack" id="player-cards"></div>
+    <div class="possession-ring"></div>
+    <div class="player-body">
+      <div class="arm arm-left"></div><div class="arm arm-right"></div>
+      <div class="leg leg-left"></div><div class="leg leg-right"></div>
+      <div class="shorts"></div>
+      <div class="torso"></div>
+      <div class="head"><div class="face"></div></div>
+      <div class="hair"></div>
+    </div>
+  </div>
+  <div class="entity" id="you-mid">
+    <div class="indicator">CM</div>
+    <div class="player-body">
+      <div class="arm arm-left"></div><div class="arm arm-right"></div>
+      <div class="leg leg-left"></div><div class="leg leg-right"></div>
+      <div class="shorts"></div>
+      <div class="torso"></div>
+      <div class="head"><div class="face"></div></div>
+      <div class="hair"></div>
+    </div>
+  </div>
+  <div class="entity keeper" id="keeper-you">
+    <div class="indicator">GK</div>
+    <div class="player-body">
+      <div class="arm arm-left"></div><div class="arm arm-right"></div>
+      <div class="leg leg-left"></div><div class="leg leg-right"></div>
+      <div class="shorts"></div>
+      <div class="torso"></div>
+      <div class="head"><div class="face"></div></div>
+      <div class="hair"></div>
+    </div>
+  </div>
+  <div class="entity" id="cpu-striker">
+    <div class="indicator">CF</div>
+    <div class="card-stack" id="cpu-striker-cards"></div>
+    <div class="player-body">
+      <div class="arm arm-left"></div><div class="arm arm-right"></div>
+      <div class="leg leg-left"></div><div class="leg leg-right"></div>
+      <div class="shorts"></div>
+      <div class="torso"></div>
+      <div class="head"><div class="face"></div></div>
+      <div class="hair"></div>
+    </div>
+  </div>
+  <div class="entity" id="cpu-mid">
+    <div class="indicator">CM</div>
+    <div class="card-stack" id="cpu-mid-cards"></div>
+    <div class="player-body">
+      <div class="arm arm-left"></div><div class="arm arm-right"></div>
+      <div class="leg leg-left"></div><div class="leg leg-right"></div>
+      <div class="shorts"></div>
+      <div class="torso"></div>
+      <div class="head"><div class="face"></div></div>
+      <div class="hair"></div>
+    </div>
+  </div>
+  <div class="entity keeper" id="keeper-cpu">
+    <div class="indicator">GK</div>
+    <div class="player-body">
+      <div class="arm arm-left"></div><div class="arm arm-right"></div>
+      <div class="leg leg-left"></div><div class="leg leg-right"></div>
+      <div class="shorts"></div>
+      <div class="torso"></div>
+      <div class="head"><div class="face"></div></div>
+      <div class="hair"></div>
+    </div>
+  </div>
+  <div class="entity" id="ref">
+    <div class="indicator">REF</div>
+    <div class="player-body">
+      <div class="arm arm-left"></div><div class="arm arm-right"></div>
+      <div class="leg leg-left"></div><div class="leg leg-right"></div>
+      <div class="shorts"></div>
+      <div class="torso"></div>
+      <div class="head"><div class="face"></div></div>
+      <div class="hair"></div>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hud-panel" id="score">
+      <span class="you">ARGENTINA 0</span> &nbsp;-&nbsp; <span class="cpu">0 PORTUGAL</span>
+      <span class="timer" id="timer">90:00</span>
+    </div>
+    <div class="hud-panel" id="stats">
+      <div><span class="label">Coins:</span> <span class="coins" id="coins">0</span></div>
+      <div><span class="label">Gems:</span> <span class="gems" id="gems">0</span> 💎</div>
+      <div><span class="label">Speed:</span> <span id="stat-speed">1x</span></div>
+      <div><span class="label">Kick:</span> <span id="stat-power">1x</span></div>
+    </div>
+  </div>
+
+  <!-- Power meter -->
+  <div id="power-meter"><div id="power-fill"></div></div>
+
+  <!-- Controls hint -->
+  <div id="controls-hint">
+    Move: <kbd>W A S D</kbd> &nbsp;|&nbsp; Kick: hold <kbd>Space</kbd> &nbsp;|&nbsp; Jump: <kbd>Shift</kbd> &nbsp;|&nbsp; Tackle: <kbd>F</kbd> &nbsp;|&nbsp; <b>Bicycle: <kbd>Space</kbd> (no ball) → <kbd>Shift</kbd></b> &nbsp;|&nbsp; Shop: <kbd>B</kbd>
+  </div>
+
+  <!-- Claim gift button -->
+  <button id="claim-btn" title="Claim 1000 coins + 100 gems">🎁 CLAIM</button>
+
+  <!-- Anti-tackle shield button -->
+  <button id="shield-btn" title="Toggle anti-tackle shield">🛡️</button>
+
+  <!-- Fullscreen button -->
+  <button id="fs-btn" title="Fullscreen (F11)">⛶</button>
+
+  <!-- Shop button -->
+  <button id="shop-btn">SHOP</button>
+
+  <!-- Mobile controls -->
+  <div id="mobile-controls">
+    <div id="joystick"><div id="joystick-knob"></div></div>
+    <button id="kick-btn">KICK</button>
+  </div>
+
+  <!-- Shootout scoreboard -->
+  <div id="shootout-panel">
+    <div class="so-title">PENALTY SHOOTOUT</div>
+    <div class="so-row"><div class="so-label you">FRA</div><div class="so-dots" id="so-you"></div></div>
+    <div class="so-row"><div class="so-label cpu">ESP</div><div class="so-dots" id="so-cpu"></div></div>
+  </div>
+
+  <!-- Team picker overlay -->
+  <div id="team-picker">
+    <div class="tp-card">
+      <h2>CHOOSE YOUR TEAM</h2>
+      <div class="tp-vs">ARGENTINA 🇦🇷  vs  🇵🇹 PORTUGAL</div>
+      <div class="tp-options">
+        <div class="tp-team" data-team="argentina">
+          <div class="flag argentina"></div>
+          <div class="name">ARGENTINA</div>
+        </div>
+        <div class="tp-team" data-team="portugal">
+          <div class="flag portugal"></div>
+          <div class="name">PORTUGAL</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen flash overlay -->
+  <div id="screen-flash"></div>
+
+  <!-- Goal banner -->
+  <div id="goal-banner">GOAL!</div>
+
+  <!-- Full-time overlay -->
+  <div id="fulltime">
+    <div class="ft-card">
+      <div class="ft-label">FULL TIME</div>
+      <div class="ft-result" id="ft-result">YOU WIN!</div>
+      <div class="ft-score" id="ft-score"><span class="you">0</span> &nbsp;-&nbsp; <span class="cpu">0</span></div>
+      <div class="ft-coins" id="ft-coins">+0 bonus coins</div>
+      <button id="ft-replay">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <!-- Shop modal -->
+  <div id="shop">
+    <div class="shop-card">
+      <h2>⚽ Game Pass Shop</h2>
+      <div class="sub">Coins: <span id="shop-coins">0</span></div>
+      <div id="pass-list"></div>
+      <button id="close-shop">Close (B)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ============ STATE ============
+  const game = document.getElementById('game');
+  const playerEl = document.getElementById('player');
+  const ballEl = document.getElementById('ball');
+  const ballShadowEl = document.getElementById('ball-shadow');
+  const youMidEl = document.getElementById('you-mid');
+  const keeperYouEl = document.getElementById('keeper-you');
+  const cpuStrikerEl = document.getElementById('cpu-striker');
+  const cpuMidEl = document.getElementById('cpu-mid');
+  const keeperCpuEl = document.getElementById('keeper-cpu');
+  const refEl = document.getElementById('ref');
+  const goalBanner = document.getElementById('goal-banner');
+  const shopEl = document.getElementById('shop');
+  const passListEl = document.getElementById('pass-list');
+  const powerMeterEl = document.getElementById('power-meter');
+  const powerFillEl = document.getElementById('power-fill');
+  const svgBoxes = document.getElementById('svg-boxes');
+
+  let W = window.innerWidth, H = window.innerHeight;
+  const PLAYER_R = 18, BALL_R = 11, KEEPER_R = 18;
+  const PLAYER_OP_R = 24; // bigger collision footprint for the player
+  const JUMP_VELOCITY = 9;
+  const GOAL_HALF = 100; // half height of goal mouth
+  const FIELD_LEFT = 14, FIELD_RIGHT_OFFSET = 14;
+
+  function fieldRight() { return W - FIELD_RIGHT_OFFSET; }
+
+  // entities
+  function makeEntity(x, y, r, team) {
+    return { x, y, z: 0, vz: 0, vx: 0, vy: 0, r, team, kickCooldown: 0, lastTouch: 0, facingX: 1, facingY: 0 };
+  }
+  // You play CENTER FORWARD — start central, just past the halfway line in attacking half
+  const player        = makeEntity(W * 0.55, H / 2, PLAYER_OP_R, 'you');
+  // CM sits deeper, behind you
+  const youMid        = makeEntity(W * 0.30, H / 2 + 60, PLAYER_R, 'you');
+  const keeperYou     = makeEntity(40,           H / 2, KEEPER_R, 'you');
+  const cpuStriker    = makeEntity(W * 0.7, H / 2 - 60, PLAYER_R, 'cpu');
+  const cpuMid        = makeEntity(W * 0.6, H / 2 + 80, PLAYER_R, 'cpu');
+  const keeperCpu     = makeEntity(W - 40, H / 2, KEEPER_R, 'cpu');
+  const ref           = makeEntity(W / 2, H / 2 - 100, PLAYER_R, 'ref');
+  const cpuTeam = [cpuStriker, cpuMid, keeperCpu];
+  const youTeam = [player, youMid, keeperYou];
+  const allPlayers = [player, youMid, keeperYou, cpuStriker, cpuMid, keeperCpu];
+  // Mark keepers
+  keeperYou.isKeeper = true;
+  keeperCpu.isKeeper = true;
+
+  // Ball with z height for arcs
+  const ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, z: 0, vz: 0, spin: 0, rot: 0 };
+
+  const state = {
+    youScore: 0,
+    cpuScore: 0,
+    coins: 100,
+    gems: 0,
+    paused: false,
+    goalCooldown: 0,
+    timeLeft: 90 * 60,         // 60 ticks per second of game time
+    lastTouchTeam: null,       // for resets
+    kickCharge: 0,             // 0..1
+    kicking: false,
+    gameOver: false,
+    halftimePause: false,
+    halftimeReached: false,
+    awaitingTeamPick: true,
+    youCountry: 'argentina', // 'argentina' | 'portugal' (set on team pick)
+    cpuCountry: 'portugal',
+    shootout: {
+      active: false,
+      phase: 'idle',     // 'idle' | 'banner' | 'setup' | 'live' | 'result' | 'done'
+      phaseTimer: 0,
+      turn: 'you',       // 'you' | 'cpu'
+      youAtt: [],        // array of 'goal' | 'miss'
+      cpuAtt: [],
+    },
+  };
+
+  // Game passes
+  const passes = [
+    { id: 'speed1',    name: 'Speed Boost I',   desc: '+25% movement speed',  cost: 50,  owned: false },
+    { id: 'speed2',    name: 'Speed Boost II',  desc: '+50% movement speed (replaces I)', cost: 200, owned: false },
+    { id: 'power1',    name: 'Power Kick I',    desc: '+40% kick power',      cost: 75,  owned: false },
+    { id: 'power2',    name: 'Power Kick II',   desc: '+80% kick power',      cost: 250, owned: false },
+    { id: 'magnet',    name: 'Ball Magnet',     desc: 'Ball is drawn to you when nearby', cost: 150, owned: false },
+    { id: 'curve',     name: 'Curve Shot',      desc: 'Hold a movement key while kicking to curve the ball', cost: 180, owned: false },
+    { id: 'doublecoin',name: 'Double Coins',    desc: 'Earn 2x coins per goal', cost: 300, owned: false },
+    { id: 'mega',      name: 'MEGA KICK',       desc: 'Triple kick power + glow', cost: 800, owned: false },
+    { id: 'longrange', name: 'Long Range',      desc: 'Tap-kicks fire at full power (no charging)',  cost: 300, owned: false },
+    { id: 'autoaim',   name: "Striker's Eye",   desc: 'Kicks auto-aim at the nearest open goal corner', cost: 450, owned: false },
+    { id: 'sticky',    name: 'Sticky Boots',    desc: 'Much harder for CPU tackles to strip the ball', cost: 260, owned: false },
+    { id: 'tacklem',   name: 'Tackle Master',   desc: 'Tackle cooldown reduced by 60%',              cost: 220, owned: false },
+    { id: 'nocards',   name: 'Diplomatic Immunity', desc: 'Never get a yellow or red card',          cost: 400, owned: false },
+    { id: 'goaliebuf', name: 'Top Keeper',      desc: 'Your goalkeeper is dramatically faster + bigger save radius', cost: 350, owned: false },
+    { id: '12thman',   name: '12th Man',        desc: 'The crowd cheers — +20% speed while you have the ball', cost: 350, owned: false },
+    { id: 'sprint',    name: 'Sprint',          desc: 'Hold Q to sprint at +60% speed',              cost: 320, owned: false },
+    // === PREMIUM (gem-priced) ===
+    { id: 'pdiamond',  name: '💎 Diamond Speed', desc: 'Extra +50% movement (stacks with Speed II)', cost: 8,  owned: false, premium: true },
+    { id: 'pcannon',   name: '💎 Cannon Kick',   desc: 'Extra +100% kick power (stacks)',            cost: 10, owned: false, premium: true },
+    { id: 'pboots',    name: '💎 Golden Boots',  desc: 'Each goal earns 3 gems instead of 1',         cost: 12, owned: false, premium: true },
+    { id: 'paura',     name: '💎 VIP Aura',      desc: 'Permanent golden glow around your player',    cost: 5,  owned: false, premium: true },
+    { id: 'prainbow',  name: '💎 Rainbow Ball',  desc: 'Cosmetic: the ball cycles through rainbow colors', cost: 6,  owned: false, premium: true },
+    { id: 'pflames',   name: '💎 Flame Strike',  desc: 'A flaming trail follows fast shots',          cost: 14, owned: false, premium: true },
+    { id: 'pdream',    name: '💎 Dream Team',    desc: 'Your CM teammate gets OP stats too',          cost: 18, owned: false, premium: true },
+    { id: 'pslowmo',   name: '💎 Bullet Time',   desc: 'Hold X to slow time around you',              cost: 20, owned: false, premium: true },
+    { id: 'pbig',      name: '💎 Big Goal',      desc: "Your goal is unchanged — but the CPU's net is +50% taller", cost: 16, owned: false, premium: true },
+    // === OP-TIER (coin) ===
+    { id: 'godmode',   name: '⚡ GOD MODE',      desc: 'CPU tackles can never strip the ball from you', cost: 1500, owned: false },
+    { id: 'tornado',   name: '⚡ Tornado Speed', desc: '+100% movement on top of all other speed buffs', cost: 1200, owned: false },
+    { id: 'mega3',     name: '⚡ NUCLEAR KICK',  desc: 'x4 kick power on top of everything else',     cost: 1800, owned: false },
+    { id: 'doubleg',   name: '⚡ Double Goals',  desc: 'Every goal you score counts as 2 on the scoreboard', cost: 1400, owned: false },
+    // === OP-TIER (premium gems) ===
+    { id: 'paimbot',   name: '💎 AIMBOT',        desc: 'All kicks lock onto a goal corner with zero inaccuracy', cost: 30, owned: false, premium: true },
+    { id: 'pgiant',    name: '💎 Giant Mode',    desc: 'You are 50% bigger — bigger collision, harder to bump', cost: 28, owned: false, premium: true },
+    { id: 'pminion',   name: '💎 Mini CPUs',     desc: 'CPU outfielders are 40% smaller (and slower)', cost: 25, owned: false, premium: true },
+    { id: 'pjet',      name: '💎 Jetpack',       desc: 'Unlimited jumps — never need to land first',  cost: 30, owned: false, premium: true },
+    { id: 'pheel',     name: '💎 Heel Doubler',  desc: 'Each goal awards 2x score AND 2x coins',      cost: 35, owned: false, premium: true },
+    { id: 'pclone',    name: '💎 Clone Wars',    desc: 'Every shot also fires a phantom 2nd ball one tick later', cost: 40, owned: false, premium: true },
+    { id: 'pfreeze',   name: '💎 Time Freeze',   desc: 'CPU players freeze in place while you charge a kick', cost: 32, owned: false, premium: true },
+  ];
+
+  // ============ INPUT ============
+  const keys = {};
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === ' ') { e.preventDefault(); if (!keys[' ']) state.kicking = true; }
+    if (k === 'b') { toggleShop(); e.preventDefault(); return; }
+    if (k === 'shift') { e.preventDefault(); tryJump(); }
+    if (k === 'f') { e.preventDefault(); tryTackle(); }
+    keys[k] = true;
+  });
+  window.addEventListener('keyup', (e) => {
+    const k = e.key.toLowerCase();
+    keys[k] = false;
+    if (k === ' ') { releaseKick(); }
+  });
+
+  // Mobile joystick
+  const joystick = document.getElementById('joystick');
+  const knob = document.getElementById('joystick-knob');
+  let joyTouchId = null, joyDir = { x: 0, y: 0 };
+  joystick.addEventListener('touchstart', handleJoyStart, { passive: false });
+  joystick.addEventListener('touchmove', handleJoyMove, { passive: false });
+  joystick.addEventListener('touchend', handleJoyEnd);
+  function handleJoyStart(e) {
+    e.preventDefault();
+    if (joyTouchId === null) joyTouchId = e.changedTouches[0].identifier;
+    handleJoyMove(e);
+  }
+  function handleJoyMove(e) {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier !== joyTouchId) continue;
+      const rect = joystick.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      let dx = t.clientX - cx, dy = t.clientY - cy;
+      const max = rect.width / 2;
+      const dist = Math.hypot(dx, dy);
+      if (dist > max) { dx = dx / dist * max; dy = dy / dist * max; }
+      knob.style.left = (50 + dx / rect.width * 100) + '%';
+      knob.style.top  = (50 + dy / rect.height * 100) + '%';
+      joyDir.x = dx / max; joyDir.y = dy / max;
+    }
+  }
+  function handleJoyEnd(e) {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== joyTouchId) continue;
+      joyTouchId = null;
+      joyDir.x = 0; joyDir.y = 0;
+      knob.style.left = '50%'; knob.style.top = '50%';
+    }
+  }
+  const kickBtn = document.getElementById('kick-btn');
+  kickBtn.addEventListener('touchstart', (e) => { e.preventDefault(); state.kicking = true; keys[' '] = true; });
+  kickBtn.addEventListener('touchend',   (e) => { e.preventDefault(); keys[' '] = false; releaseKick(); });
+
+  document.getElementById('shop-btn').addEventListener('click', toggleShop);
+  document.getElementById('close-shop').addEventListener('click', toggleShop);
+
+  // Fullscreen toggle
+  function toggleFullscreen() {
+    const el = document.documentElement;
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fsEl) {
+      if (el.requestFullscreen) el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }
+  }
+  document.getElementById('fs-btn').addEventListener('click', toggleFullscreen);
+
+  // Anti-tackle shield toggle — when on, CPU can't tackle/strip the ball.
+  state.shielded = false;
+  const shieldBtn = document.getElementById('shield-btn');
+  shieldBtn.addEventListener('click', () => {
+    state.shielded = !state.shielded;
+    shieldBtn.classList.toggle('on', state.shielded);
+    playerEl.classList.toggle('shielded', state.shielded);
+    showBanner(state.shielded ? 'SHIELD ON' : 'SHIELD OFF',
+               state.shielded ? '#4da6ff' : '#ff5252', 36, 700);
+  });
+
+  // Claim gift button — generous payout, single use per browser
+  const CLAIM_KEY = 'soccer-sim-gift-claimed-v8';
+  const CLAIM_COINS = 1999999999999;
+  const CLAIM_GEMS  = 87574;
+  const claimBtn = document.getElementById('claim-btn');
+  claimBtn.textContent = `🎁 +${CLAIM_COINS} 🪙 +${CLAIM_GEMS} 💎`;
+  function refreshClaimBtn() {
+    try {
+      if (localStorage.getItem(CLAIM_KEY)) claimBtn.classList.add('claimed');
+    } catch (e) {}
+  }
+  refreshClaimBtn();
+  claimBtn.addEventListener('click', () => {
+    state.coins += CLAIM_COINS;
+    state.gems  += CLAIM_GEMS;
+    saveGame();
+    renderHud();
+    claimBtn.classList.add('claimed');
+    try { localStorage.setItem(CLAIM_KEY, '1'); } catch (e) {}
+    showBanner(`+${CLAIM_COINS} 🪙  +${CLAIM_GEMS} 💎`, '#ffeb3b', 44, 1700);
+  });
+  // Update button icon when fullscreen state changes, and resize the field
+  function onFsChange() {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    document.getElementById('fs-btn').textContent = fsEl ? '⤢' : '⛶';
+    // Force a resize so the field markings re-draw at the new dimensions
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+  }
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+
+  // ============ PASSES / HUD ============
+  // O(1) pass lookup — refreshed whenever a pass is bought or save loaded.
+  let ownedPasses = new Set();
+  function refreshOwnedPasses() {
+    ownedPasses = new Set(passes.filter(p => p.owned).map(p => p.id));
+  }
+  function hasPass(id) { return ownedPasses.has(id); }
+
+  // ============ PERSISTENCE (localStorage) ============
+  const SAVE_KEY = 'soccer-sim-save-v1';
+  function saveGame() {
+    try {
+      const data = {
+        coins: state.coins,
+        gems:  state.gems,
+        owned: passes.filter(p => p.owned).map(p => p.id),
+      };
+      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    } catch (e) { /* private mode etc — ignore */ }
+  }
+  function loadGame() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (typeof data.coins === 'number') state.coins = data.coins;
+      if (typeof data.gems  === 'number') state.gems  = data.gems;
+      if (Array.isArray(data.owned)) {
+        for (const p of passes) if (data.owned.includes(p.id)) p.owned = true;
+      }
+      refreshOwnedPasses();
+    } catch (e) { /* ignore corrupt save */ }
+  }
+  function getSpeedMult() {
+    let m = 2.0; // OP base
+    if (hasPass('speed2')) m *= 1.5;
+    else if (hasPass('speed1')) m *= 1.25;
+    if (hasPass('pdiamond')) m *= 1.5; // premium stacks
+    if (hasPass('tornado'))  m *= 2.0; // OP-tier
+    if (hasPass('12thman') && player.hasBall) m *= 1.2;
+    if (hasPass('sprint') && keys['q']) m *= 1.6;
+    return m;
+  }
+  function getPowerMult() {
+    let m = 1.8; // OP base
+    if (hasPass('power2')) m *= 1.8;
+    else if (hasPass('power1')) m *= 1.4;
+    if (hasPass('mega'))    m *= 3;
+    if (hasPass('pcannon')) m *= 2; // premium stacks
+    if (hasPass('mega3'))   m *= 4; // OP-tier nuclear
+    return m;
+  }
+  function tryJump() {
+    if (player.z <= 0.01) {
+      const isBicycle = (player.bicycleReady || 0) > 0;
+      player.vz = isBicycle ? JUMP_VELOCITY * 1.6 : JUMP_VELOCITY;
+      // Jumping releases ball control (ball stays on ground)
+      if (player.hasBall) {
+        ball.vx = player.vx * 0.6;
+        ball.vy = player.vy * 0.6;
+        player.hasBall = false;
+      }
+      if (isBicycle) {
+        player.bicycling = 55;
+        player.bicycleReady = 0;
+        // Lunge forward in facing direction so you visibly fly through the air
+        const fx = player.facingX || 1, fy = player.facingY || 0;
+        const lunge = 9;
+        player.vx = fx * lunge;
+        player.vy = fy * lunge;
+        playerEl.classList.remove('bicycling');
+        // Force reflow so the animation re-triggers each time
+        void playerEl.offsetWidth;
+        playerEl.classList.add('bicycling');
+      }
+    }
+  }
+  function tryTackle() {
+    if (state.gameOver || state.paused) return;
+    if (player.sentOff) return;
+    if (player.tackleCooldown > 0) return;
+    // Lunge in current movement direction (or facing forward if idle)
+    let dx = player.vx, dy = player.vy;
+    const sp = Math.hypot(dx, dy);
+    if (sp < 0.5) { dx = 1; dy = 0; }
+    else { dx /= sp; dy /= sp; }
+    const lunge = 11;
+    player.vx = dx * lunge;
+    player.vy = dy * lunge;
+    player.tackling = 18;       // active for 18 ticks
+    player.tackleCooldown = 55; // recovery
+    playerEl.classList.add('tackling');
+  }
+  function endTackleVisual() {
+    playerEl.classList.remove('tackling');
+  }
+  function setCpuTacklingVisual(c, on) {
+    const el = (c === cpuStriker) ? cpuStrikerEl : (c === cpuMid) ? cpuMidEl : null;
+    if (!el) return;
+    el.classList.toggle('tackling', on);
+  }
+
+  function renderShop() {
+    document.getElementById('shop-coins').textContent = state.coins;
+    passListEl.innerHTML = '';
+    // Coin passes
+    let premiumStarted = false;
+    for (const p of passes) {
+      if (p.premium && !premiumStarted) {
+        const div = document.createElement('div');
+        div.className = 'shop-divider';
+        div.textContent = `PREMIUM PASSES • Gems: ${state.gems} 💎`;
+        passListEl.appendChild(div);
+        premiumStarted = true;
+      }
+      const row = document.createElement('div');
+      row.className = 'pass' + (p.premium ? ' premium' : '');
+      const currency = p.premium ? state.gems : state.coins;
+      const icon = p.premium ? '💎' : '🪙';
+      row.innerHTML = `
+        <div class="pass-info">
+          <h3>${p.name}</h3>
+          <p>${p.desc}</p>
+        </div>
+        <button class="pass-buy ${p.owned ? 'owned' : ''}"
+                ${p.owned || currency < p.cost ? 'disabled' : ''}
+                data-id="${p.id}">
+          ${p.owned ? 'OWNED' : `${p.cost} ${icon}`}
+        </button>
+      `;
+      passListEl.appendChild(row);
+    }
+    passListEl.querySelectorAll('.pass-buy').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const p = passes.find(x => x.id === btn.dataset.id);
+        if (!p || p.owned) return;
+        if (p.premium) {
+          if (state.gems < p.cost) return;
+          state.gems -= p.cost;
+        } else {
+          if (state.coins < p.cost) return;
+          state.coins -= p.cost;
+        }
+        p.owned = true;
+        refreshOwnedPasses();
+        applyVipAura();
+        saveGame();
+        renderHud();
+        renderShop();
+      });
+    });
+  }
+  function applyVipAura() {
+    playerEl.classList.toggle('vip', !!hasPass('paura'));
+  }
+
+  function toggleShop() {
+    state.paused = !state.paused;
+    if (state.paused) { shopEl.classList.add('open'); renderShop(); }
+    else              { shopEl.classList.remove('open'); }
+  }
+
+  function renderHud() {
+    const m = Math.floor(state.timeLeft / 60 / 60);
+    const s = Math.floor((state.timeLeft / 60) % 60);
+    document.getElementById('score').innerHTML =
+      `<span class="you">${KITS[state.youCountry].label} ${state.youScore}</span> &nbsp;-&nbsp; <span class="cpu">${state.cpuScore} ${KITS[state.cpuCountry].label}</span>` +
+      `<span class="timer" id="timer">${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</span>`;
+    document.getElementById('coins').textContent = state.coins;
+    document.getElementById('gems').textContent = state.gems;
+    document.getElementById('stat-speed').textContent = getSpeedMult() + 'x';
+    document.getElementById('stat-power').textContent = getPowerMult() + 'x';
+  }
+
+  // ============ FIELD MARKINGS ============
+  function drawFieldBoxes() {
+    svgBoxes.innerHTML = '';
+    const cy = H / 2;
+    const boxH = 320, boxW = 130;
+    const sixH = 180, sixW = 60;
+    const penaltyOffset = 100;
+    // Left penalty box
+    svgBoxes.innerHTML += `
+      <rect x="${FIELD_LEFT}" y="${cy - boxH/2}" width="${boxW}" height="${boxH}"/>
+      <rect x="${FIELD_LEFT}" y="${cy - sixH/2}" width="${sixW}" height="${sixH}"/>
+      <circle cx="${FIELD_LEFT + penaltyOffset}" cy="${cy}" r="3" fill="rgba(255,255,255,0.85)"/>
+      <path d="M ${FIELD_LEFT + boxW} ${cy - 40} A 50 50 0 0 1 ${FIELD_LEFT + boxW} ${cy + 40}"/>
+    `;
+    // Right penalty box
+    const rx = W - FIELD_RIGHT_OFFSET;
+    svgBoxes.innerHTML += `
+      <rect x="${rx - boxW}" y="${cy - boxH/2}" width="${boxW}" height="${boxH}"/>
+      <rect x="${rx - sixW}" y="${cy - sixH/2}" width="${sixW}" height="${sixH}"/>
+      <circle cx="${rx - penaltyOffset}" cy="${cy}" r="3" fill="rgba(255,255,255,0.85)"/>
+      <path d="M ${rx - boxW} ${cy - 40} A 50 50 0 0 0 ${rx - boxW} ${cy + 40}"/>
+    `;
+  }
+
+  // ============ UTILITIES ============
+  function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function nearestTeammateToBall(team) {
+    let best = null, bd = Infinity;
+    for (const p of team) {
+      if (p === keeperYou || p === keeperCpu) continue;
+      const d = dist(p, ball);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+
+  function showGoal(text, color) {
+    goalBanner.textContent = text;
+    goalBanner.style.color = color || '#ffeb3b';
+    goalBanner.style.fontSize = '96px';
+    goalBanner.classList.add('show');
+    setTimeout(() => goalBanner.classList.remove('show'), 1200);
+  }
+
+  // === GOAL CELEBRATION ===
+  // --- AUDIO ---
+  let audioCtx = null;
+  function getAudioCtx() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) { return null; }
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function playFanfare() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    // C5 - E5 - G5 - C6 ascending fanfare
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      osc.connect(gain).connect(ctx.destination);
+      const start = ctx.currentTime + i * 0.12;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.18, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.32);
+      osc.start(start);
+      osc.stop(start + 0.34);
+    });
+    // Final triumphant chord
+    const chordStart = ctx.currentTime + notes.length * 0.12;
+    [523.25, 659.25, 783.99].forEach(freq => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      osc.connect(gain).connect(ctx.destination);
+      gain.gain.setValueAtTime(0.0001, chordStart);
+      gain.gain.exponentialRampToValueAtTime(0.12, chordStart + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, chordStart + 0.7);
+      osc.start(chordStart);
+      osc.stop(chordStart + 0.72);
+    });
+  }
+  function playSiu() {
+    if (!('speechSynthesis' in window)) return;
+    try {
+      speechSynthesis.cancel();
+      // Layered Ronaldo-style "SUUUUUU" — sharp opening then a very long sustained vowel
+      const u = new SpeechSynthesisUtterance('S' + 'U'.repeat(90));
+      u.pitch = 0.6;
+      u.rate  = 0.22;
+      u.volume = 1.0;
+      speechSynthesis.speak(u);
+    } catch (e) { /* ignore */ }
+  }
+
+  const CONFETTI_COLORS = ['#f44336','#e91e63','#9c27b0','#3f51b5','#03a9f4','#00bcd4','#4caf50','#ffeb3b','#ff9800','#fff'];
+  function spawnConfetti(x, y) {
+    const p = document.createElement('div');
+    p.className = 'confetti';
+    p.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    p.style.left = x + 'px';
+    p.style.top  = y + 'px';
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = 100 + Math.random() * 280;
+    const dx    = Math.cos(angle) * dist;
+    const dy    = Math.sin(angle) * dist - 80; // bias upward
+    p.style.setProperty('--dx',  dx + 'px');
+    p.style.setProperty('--dy',  dy + 'px');
+    p.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg');
+    game.appendChild(p);
+    setTimeout(() => p.remove(), 1500);
+  }
+  function flashScreen(color) {
+    const f = document.getElementById('screen-flash');
+    f.style.setProperty('--flash-color', color);
+    f.classList.remove('flash');
+    void f.offsetWidth;
+    f.classList.add('flash');
+  }
+  function celebrateGoal(team) {
+    // Pulse score
+    const scoreEl = document.getElementById('score');
+    scoreEl.classList.remove('score-pulse');
+    void scoreEl.offsetWidth;
+    scoreEl.classList.add('score-pulse');
+    // Screen flash in team color
+    flashScreen(team === 'you' ? 'rgba(77,166,255,0.45)' : 'rgba(255,107,107,0.45)');
+    // Confetti burst at the goal
+    const goalX = (team === 'you') ? fieldRight() - 30 : FIELD_LEFT + 30;
+    const cy = H / 2;
+    for (let i = 0; i < 70; i++) spawnConfetti(goalX, cy);
+    // Audio: fanfare only — SUUUU removed
+    playFanfare();
+    if (team === 'you') {
+      // Whole team does the normal arm-up celebration
+      [playerEl, youMidEl, keeperYouEl].forEach(el => {
+        el.classList.add('celebrating');
+        setTimeout(() => el.classList.remove('celebrating'), 1700);
+      });
+    } else {
+      // Galaxy team celebrates normally
+      [cpuStrikerEl, cpuMidEl, keeperCpuEl].forEach(el => {
+        el.classList.add('celebrating');
+        setTimeout(() => el.classList.remove('celebrating'), 1700);
+      });
+    }
+  }
+  function showOut(text, color) {
+    goalBanner.textContent = text;
+    goalBanner.style.color = color || '#fff';
+    goalBanner.style.fontSize = '42px';
+    goalBanner.classList.add('show');
+    setTimeout(() => goalBanner.classList.remove('show'), 900);
+  }
+  function showFoul() {
+    goalBanner.textContent = 'FOUL!';
+    goalBanner.style.color = '#ffeb3b';
+    goalBanner.style.fontSize = '72px';
+    goalBanner.classList.add('show');
+    setTimeout(() => goalBanner.classList.remove('show'), 1100);
+  }
+  function showBanner(text, color, size, ms = 1300) {
+    goalBanner.textContent = text;
+    goalBanner.style.color = color || '#fff';
+    goalBanner.style.fontSize = size + 'px';
+    goalBanner.classList.add('show');
+    setTimeout(() => goalBanner.classList.remove('show'), ms);
+  }
+  function renderCards() {
+    const stack = document.getElementById('player-cards');
+    stack.innerHTML = '';
+    const c = player.cards || 0;
+    if (c >= 1) { const e = document.createElement('div'); e.className = 'card yellow'; stack.appendChild(e); }
+    if (c >= 2) { const e = document.createElement('div'); e.className = 'card red';    stack.appendChild(e); }
+  }
+  function renderCpuCards(c) {
+    const stackId = (c === cpuStriker) ? 'cpu-striker-cards' : 'cpu-mid-cards';
+    const stack = document.getElementById(stackId);
+    if (!stack) return;
+    stack.innerHTML = '';
+    const n = c.cards || 0;
+    if (n >= 1) { const e = document.createElement('div'); e.className = 'card yellow'; stack.appendChild(e); }
+    if (n >= 2) { const e = document.createElement('div'); e.className = 'card red';    stack.appendChild(e); }
+  }
+
+  function resetPositions() {
+    ball.x = W / 2; ball.y = H / 2;
+    ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0; ball.spin = 0;
+    player.hasBall = false;
+    player.facingX = 1; player.facingY = 0;
+    player.bicycleReady = 0;
+    player.bicycling = 0;
+    playerEl.classList.remove('bicycling');
+    // You = CF, central just past halfway in attacking half
+    player.x = W * 0.55; player.y = H / 2; player.vx = player.vy = 0;
+    // CM drops deeper, behind you
+    youMid.x = W * 0.30; youMid.y = H / 2 + 60; youMid.vx = youMid.vy = 0;
+    keeperYou.x = 40; keeperYou.y = H / 2; keeperYou.vx = keeperYou.vy = 0;
+    cpuStriker.x = W * 0.7; cpuStriker.y = H / 2 - 60; cpuStriker.vx = cpuStriker.vy = 0;
+    cpuMid.x = W * 0.6; cpuMid.y = H / 2 + 80; cpuMid.vx = cpuMid.vy = 0;
+    keeperCpu.x = W - 40; keeperCpu.y = H / 2; keeperCpu.vx = keeperCpu.vy = 0;
+    state.goalCooldown = 60;
+  }
+
+  // ============ KICK MECHANICS ============
+  function releaseKick() {
+    if (!state.kicking) return;
+    state.kicking = false;
+    const charge = state.kickCharge;
+    state.kickCharge = 0;
+    powerMeterEl.classList.remove('show');
+    powerFillEl.style.width = '0%';
+
+    // Only kick if ball is close enough
+    const d = dist(player, ball);
+    if (d > 60) {
+      // Whiffed kick — prime a bicycle-kick window. Jump within ~30 ticks to bicycle.
+      player.bicycleReady = 30;
+      return;
+    }
+
+    const dx = ball.x - player.x, dy = ball.y - player.y;
+    const dlen = Math.hypot(dx, dy) || 1;
+    const nx = dx / dlen, ny = dy / dlen;
+
+    // Power scales 0.5 -> 1.0 with charge (OP — even tap kicks are strong)
+    const powerScale = 0.5 + charge * 0.5;
+    const basePower = 18 * getPowerMult() * powerScale;
+
+    ball.vx = nx * basePower;
+    ball.vy = ny * basePower;
+
+    // Add some loft based on charge (creates an arc)
+    ball.vz = 2 + charge * 5;
+
+    // Curve shot: spin from movement direction
+    if (hasPass('curve')) {
+      let ix = 0, iy = 0;
+      if (keys['w'] || keys['arrowup'])    iy -= 1;
+      if (keys['s'] || keys['arrowdown'])  iy += 1;
+      if (keys['a'] || keys['arrowleft'])  ix -= 1;
+      if (keys['d'] || keys['arrowright']) ix += 1;
+      // Cross product (perpendicular component) -> spin
+      ball.spin = (nx * iy - ny * ix) * 0.3;
+    } else {
+      ball.spin = 0;
+    }
+
+    player.lastTouch = 1;
+    state.lastTouchTeam = 'you';
+    player.hasBall = false;
+    // Taking the kick clears dead-ball protection
+    state.deadBallProtect = false;
+  }
+
+  // ============ PHYSICS / LOOP ============
+  function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    drawFieldBoxes();
+  }
+  window.addEventListener('resize', resize);
+
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(33, now - last) / 16.67;
+    last = now;
+    if (!state.paused && !state.halftimePause && !state.awaitingTeamPick) update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function startHalftime() {
+    state.halftimePause = true;
+    showBanner(`HALF TIME — ${state.youScore} : ${state.cpuScore}`, '#ffeb3b', 56, 2600);
+    setTimeout(() => {
+      showBanner('2ND HALF', '#4caf50', 60, 1100);
+      resetPositions();
+      state.halftimePause = false;
+    }, 2600);
+  }
+
+  // ----- PLAYER MOVEMENT -----
+  function updatePlayer(dt) {
+    if (player.sentOff) {
+      // Player can't play — just sit on the sideline
+      player.vx = 0; player.vy = 0;
+      return;
+    }
+    let ix = 0, iy = 0;
+    if (keys['w'] || keys['arrowup'])    iy -= 1;
+    if (keys['s'] || keys['arrowdown'])  iy += 1;
+    if (keys['a'] || keys['arrowleft'])  ix -= 1;
+    if (keys['d'] || keys['arrowright']) ix += 1;
+    if (joyDir.x || joyDir.y) { ix = joyDir.x; iy = joyDir.y; }
+    const len = Math.hypot(ix, iy) || 1;
+    ix /= len; iy /= len;
+
+    // Slow down while charging kick
+    const chargeSlow = state.kicking ? 0.7 : 1;
+    const baseSpeed = 4.8 * getSpeedMult() * chargeSlow;
+    const accel = 0.5;
+    player.vx += (ix * baseSpeed - player.vx) * accel * dt;
+    player.vy += (iy * baseSpeed - player.vy) * accel * dt;
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
+    player.x = clamp(player.x, FIELD_LEFT + player.r, fieldRight() - player.r);
+    player.y = clamp(player.y, player.r, H - player.r);
+
+    // Update facing direction based on movement (so ball carries in front of you)
+    const vmag = Math.hypot(player.vx, player.vy);
+    if (vmag > 0.6) {
+      player.facingX = player.vx / vmag;
+      player.facingY = player.vy / vmag;
+    }
+
+    // Carry the ball in front of player when in possession
+    if (player.hasBall && player.z < 1 && !player.sentOff) {
+      const off = player.r + BALL_R + 2;
+      ball.x = player.x + player.facingX * off;
+      ball.y = player.y + player.facingY * off;
+      ball.vx = player.vx;
+      ball.vy = player.vy;
+      ball.z = 0; ball.vz = 0; ball.spin = 0;
+    }
+
+    // Jump physics (z height)
+    player.vz -= 0.45 * dt;
+    player.z += player.vz * dt;
+    if (player.z < 0) { player.z = 0; player.vz = 0; }
+
+    // Tackle timers
+    if (player.tackling > 0) {
+      player.tackling -= dt;
+      if (player.tackling <= 0) {
+        endTackleVisual();
+        player.tackleBallHit = false;
+      }
+    }
+    if (player.tackleCooldown > 0) player.tackleCooldown -= dt;
+
+    // Bicycle kick timers
+    if ((player.bicycleReady || 0) > 0) player.bicycleReady -= dt;
+    if ((player.bicycling   || 0) > 0) {
+      player.bicycling -= dt;
+      if (player.bicycling <= 0) playerEl.classList.remove('bicycling');
+    }
+
+    // Charge meter
+    if (state.kicking) {
+      state.kickCharge = Math.min(1, state.kickCharge + 0.025 * dt);
+      powerMeterEl.classList.add('show');
+      powerFillEl.style.width = (state.kickCharge * 100) + '%';
+    }
+
+    playerEl.classList.toggle('boost', hasPass('mega'));
+  }
+
+  // ----- AI HELPERS -----
+  function steerToward(p, tx, ty, speed, dt, accel = 0.18) {
+    const dx = tx - p.x, dy = ty - p.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const desVx = dx / d * speed;
+    const desVy = dy / d * speed;
+    p.vx += (desVx - p.vx) * accel * dt;
+    p.vy += (desVy - p.vy) * accel * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+  }
+
+  function aiKick(p, tx, ty, power, loft = 3, inaccuracy = 0.18) {
+    const d = dist(p, ball);
+    if (d > 38) return false;
+    if (p.kickCooldown > 0) return false;
+    const dx = tx - ball.x, dy = ty - ball.y;
+    const dl = Math.hypot(dx, dy) || 1;
+    const nx = dx / dl, ny = dy / dl;
+    const ang = Math.atan2(ny, nx) + (Math.random() - 0.5) * inaccuracy;
+    const cnx = Math.cos(ang), cny = Math.sin(ang);
+    ball.vx = cnx * power;
+    ball.vy = cny * power;
+    ball.vz = loft + Math.random() * 2;
+    ball.spin = 0;
+    p.kickCooldown = 25;
+    p.lastTouch = 1;
+    state.lastTouchTeam = p.team;
+    return true;
+  }
+
+  // ----- CPU AI -----
+  function updateCpuTeam(dt) {
+    // Dead-ball restart for YOU: CPU outfielders back off and form a defensive line
+    if (state.deadBallProtect) {
+      const cy = H / 2;
+      const backOffX = Math.min(fieldRight() - 80, ball.x + 90);
+      for (const c of [cpuStriker, cpuMid]) {
+        if (c.sentOff) continue;
+        const targetY = (c === cpuStriker) ? cy - 70 : cy + 70;
+        steerToward(c, backOffX, targetY, 3.0, dt, 0.2);
+        c.x = clamp(c.x, FIELD_LEFT + c.r, fieldRight() - c.r);
+        c.y = clamp(c.y, c.r, H - c.r);
+        if ((c.tackleCooldown || 0) > 0) c.tackleCooldown -= dt;
+      }
+      return;
+    }
+    // Sent-off CPU players don't play
+    const active = [cpuStriker, cpuMid].filter(p => !p.sentOff);
+    if (active.length === 0) return;
+    // pick which CPU outfielder is the "ball chaser"
+    let chaser, supporter;
+    if (active.length === 1) {
+      chaser = active[0];
+      supporter = active[0]; // same player; supporter logic still runs but won't double-move
+    } else {
+      chaser = (dist(cpuStriker, ball) < dist(cpuMid, ball)) ? cpuStriker : cpuMid;
+      supporter = chaser === cpuStriker ? cpuMid : cpuStriker;
+    }
+
+    const cpuGoalX = FIELD_LEFT + 14;       // they attack the LEFT goal
+    const ownGoalX = fieldRight() - 14;
+    const cy = H / 2;
+
+    // ----- Chaser logic -----
+    const distToBall = dist(chaser, ball);
+    const baseSpeed = 5.4;
+    // Rare hesitation
+    const hesitating = (Math.sin(performance.now() / 700 + (chaser === cpuStriker ? 0 : 1.7)) > 0.97);
+    const reactSpeed = hesitating ? baseSpeed * 0.7 : baseSpeed;
+
+    if (distToBall > 26) {
+      // strong lead prediction
+      const tx = ball.x + ball.vx * 8;
+      const ty = ball.y + ball.vy * 8;
+      steerToward(chaser, tx, ty, reactSpeed, dt, 0.30);
+    } else {
+      const distToGoal = Math.hypot(cpuGoalX - ball.x, cy - ball.y);
+      if (distToGoal < 380) {
+        // Shoot — wider range, sharp aim, strong power
+        const aimY = (keeperYou.y > cy ? cy - 80 : cy + 80) + (Math.random() - 0.5) * 30;
+        const shotPower = 17 + Math.random() * 4;
+        const inacc = 0.12;
+        if (aiKick(chaser, cpuGoalX, aimY, shotPower, 4, inacc)) {
+          // shot taken
+        } else {
+          steerToward(chaser, cpuGoalX, cy, reactSpeed, dt, 0.25);
+        }
+      } else {
+        // dribble toward goal
+        const dribX = ball.x - 30;
+        const dribY = ball.y;
+        steerToward(chaser, dribX, dribY, reactSpeed, dt, 0.25);
+        // frequent accurate passes
+        if (Math.random() < 0.012 && dist(supporter, ball) > 80) {
+          aiKick(chaser, supporter.x, supporter.y, 13, 2, 0.10);
+        }
+      }
+    }
+
+    // ----- Supporter logic -----
+    const ballOnYourSide = ball.x < W / 2;
+    let sx, sy;
+    if (state.lastTouchTeam === 'you' || ballOnYourSide) {
+      // Defend tighter
+      sx = (ball.x + ownGoalX) / 2 - 20;
+      sy = ball.y + (chaser.y > cy ? -100 : 100);
+    } else {
+      sx = Math.max(FIELD_LEFT + 200, ball.x - 110);
+      sy = chaser.y > cy ? cy - 110 : cy + 110;
+    }
+    steerToward(supporter, sx, sy, baseSpeed * 0.85, dt, 0.12);
+
+    // CPU tackle: deliberate lunge at the player when close, like the player's F-tackle
+    for (const c of [chaser, supporter]) {
+      // decrement timers
+      if ((c.tackling || 0) > 0) {
+        c.tackling -= dt;
+        if (c.tackling <= 0) setCpuTacklingVisual(c, false);
+      }
+      if ((c.tackleCooldown || 0) > 0) c.tackleCooldown -= dt;
+      // initiate tackle (blocked while shield is on or during dead-ball restart)
+      const wantsTackle = !player.sentOff && !state.shielded && !state.deadBallProtect &&
+        (c.tackleCooldown || 0) <= 0 &&
+        (c.tackling || 0) <= 0 &&
+        dist(c, player) < 70 &&
+        (player.hasBall || dist(player, ball) < 32);
+      // Random chance so they don't all tackle every frame — bad CPU = ~3% per frame when in range
+      if (wantsTackle && Math.random() < 0.03) {
+        const dx = (player.x + player.vx * 4) - c.x;
+        const dy = (player.y + player.vy * 4) - c.y;
+        const dl = Math.hypot(dx, dy) || 1;
+        const lunge = 8.5;
+        c.vx = (dx / dl) * lunge;
+        c.vy = (dy / dl) * lunge;
+        c.tackling = 18;
+        c.tackleCooldown = 90;
+        c.tackleBallHit = false;
+        setCpuTacklingVisual(c, true);
+      }
+    }
+
+    // Bounds for outfielders
+    for (const c of [chaser, supporter]) {
+      c.x = clamp(c.x, FIELD_LEFT + c.r, fieldRight() - c.r);
+      c.y = clamp(c.y, c.r, H - c.r);
+      if (c.kickCooldown > 0) c.kickCooldown -= dt;
+    }
+  }
+
+  // ----- HUMAN TEAMMATE AI (also bad) -----
+  function updateYouMid(dt) {
+    const cpuGoalX = fieldRight() - 14;
+    const ownGoalX = FIELD_LEFT + 14;
+    const cy = H / 2;
+
+    const ballOnCpuSide = ball.x > W / 2;
+    const teammateHasBall = state.lastTouchTeam === 'you' && dist(player, ball) < 60;
+
+    const d = dist(youMid, ball);
+    const playerCloser = dist(player, ball) < d - 20;
+
+    // MATE is bad: slow, hesitant, sloppy
+    const baseSpeed = 2.6;
+    const hesitating = (Math.sin(performance.now() / 700 + 0.9) > 0.55);
+    const reactSpeed = hesitating ? baseSpeed * 0.25 : baseSpeed;
+
+    let sx, sy;
+    if (!playerCloser && d < 200) {
+      // CM has the ball — ALWAYS pass to CF (you), with a lead pass
+      if (d < 30 && !player.sentOff) {
+        const tx = player.x + player.vx * 10; // lead the moving CF
+        const ty = player.y + player.vy * 10;
+        if (aiKick(youMid, tx, ty, 12, 2, 0.15)) return;
+      }
+      // Otherwise chase the ball
+      sx = ball.x - 25 * Math.sign(cpuGoalX - ball.x);
+      sy = ball.y;
+      steerToward(youMid, sx, sy, reactSpeed, dt, 0.10);
+    } else if (teammateHasBall || ballOnCpuSide) {
+      // Forward run as a passing option (lazy)
+      sx = Math.min(W * 0.78, ball.x + 120);
+      sy = player.y > cy ? cy - 130 : cy + 130;
+      steerToward(youMid, sx, sy, reactSpeed * 0.9, dt, 0.07);
+      // If ball comes near, pass to CF instead of shooting
+      if (d < 32 && !player.sentOff) {
+        const tx = player.x + player.vx * 10;
+        const ty = player.y + player.vy * 10;
+        aiKick(youMid, tx, ty, 12, 2, 0.15);
+      }
+    } else {
+      // defend lazily
+      sx = (ball.x + ownGoalX) / 2 + 60;
+      sy = ball.y + (player.y > cy ? -130 : 130);
+      steerToward(youMid, sx, sy, reactSpeed * 0.9, dt, 0.08);
+    }
+
+    youMid.x = clamp(youMid.x, FIELD_LEFT + youMid.r, fieldRight() - youMid.r);
+    youMid.y = clamp(youMid.y, youMid.r, H - youMid.r);
+    if (youMid.kickCooldown > 0) youMid.kickCooldown -= dt;
+  }
+
+  // ----- REFEREE -----
+  // Follows the ball at a distance, never interferes with play
+  function updateRef(dt) {
+    const cy = H / 2;
+    // Stay ~120px away from ball, slightly above
+    const offX = ball.vx > 0 ? -90 : 90;
+    const tx = ball.x + offX;
+    const ty = ball.y - 110;
+    steerToward(ref, tx, ty, 3.2, dt, 0.10);
+    ref.x = clamp(ref.x, FIELD_LEFT + ref.r, fieldRight() - ref.r);
+    ref.y = clamp(ref.y, ref.r, H - ref.r);
+  }
+
+  // ----- KEEPERS -----
+  // Predict where the ball will reach a given x line (the goal line),
+  // accounting for current velocity and friction. Returns y at that x.
+  function predictBallY(targetX) {
+    let bx = ball.x, by = ball.y, vx = ball.vx, vy = ball.vy;
+    const moving = (targetX > bx && vx > 0) || (targetX < bx && vx < 0);
+    if (!moving || Math.abs(vx) < 0.5) return by;
+    let steps = 0;
+    while (steps < 120) {
+      vx *= 0.985; vy *= 0.985;
+      bx += vx; by += vy;
+      if ((targetX > ball.x && bx >= targetX) || (targetX < ball.x && bx <= targetX)) {
+        return by;
+      }
+      if (Math.abs(vx) < 0.2) break;
+      steps++;
+    }
+    return by;
+  }
+
+  function updateKeeper(k, defendX, dt) {
+    const cy = H / 2;
+    const isLeftKeeper = (k === keeperYou);
+    const isCpuKeeper  = (k === keeperCpu);
+
+    // Detect a shot heading toward this keeper's goal
+    const ballSpeed = Math.hypot(ball.vx, ball.vy);
+    const incoming = isLeftKeeper
+      ? (ball.vx < -3 && ball.x < W * 0.5)
+      : (ball.vx > 3  && ball.x > W * 0.5);
+    const shotIncoming = incoming && ballSpeed > 6;
+
+    // Galaxy keeper is BAD — slow, scatter-brained, leaves rebounds
+    const diveSpeed       = isCpuKeeper ? 2.6  : 6.5;
+    const diveAccel       = isCpuKeeper ? 0.14 : 0.45;
+    const idleSpeed       = isCpuKeeper ? 1.9  : 3.8;
+    const idleAccel       = isCpuKeeper ? 0.12 : 0.28;
+    const saveRadiusBonus = isCpuKeeper ? -4   : 18;
+    const idleRadiusBonus = isCpuKeeper ? -3   : 4;
+    // Frequently hesitates (over half the time)
+    const cpuHesitates    = isCpuKeeper && (Math.sin(performance.now() / 500) > 0.45);
+
+    let tx, ty;
+    if (shotIncoming && !cpuHesitates) {
+      // DIVE / SAVE
+      const goalLineX = isLeftKeeper ? FIELD_LEFT + 10 : fieldRight() - 10;
+      let predictedY = predictBallY(goalLineX);
+      // Big prediction error — guesses the wrong corner often
+      if (isCpuKeeper) predictedY += (Math.random() - 0.5) * 140;
+      ty = clamp(predictedY, cy - GOAL_HALF + 6, cy + GOAL_HALF - 6);
+      tx = isLeftKeeper ? FIELD_LEFT + 30 : fieldRight() - 30;
+      steerToward(k, tx, ty, diveSpeed, dt, diveAccel);
+      k.diving = true;
+    } else {
+      // Idle positioning
+      const ballNear = isLeftKeeper ? ball.x < W * 0.35 : ball.x > W * 0.65;
+      const advance = ballNear ? 50 : 0;
+      tx = isLeftKeeper ? defendX + advance : defendX - advance;
+      ty = clamp(ball.y, cy - GOAL_HALF + 10, cy + GOAL_HALF - 10);
+      // Big tracking lag
+      if (isCpuKeeper) ty += (Math.random() - 0.5) * 35;
+      steerToward(k, tx, ty, idleSpeed, dt, idleAccel);
+      k.diving = false;
+    }
+
+    // bounds
+    if (isLeftKeeper) k.x = clamp(k.x, FIELD_LEFT + k.r, W * 0.25);
+    else              k.x = clamp(k.x, W * 0.75, fieldRight() - k.r);
+    k.y = clamp(k.y, k.r, H - k.r);
+
+    if (k.kickCooldown > 0) k.kickCooldown -= dt;
+
+    // SAVE: catch/punch when ball is close
+    const d = dist(k, ball);
+    const saveRadius = k.r + BALL_R + (shotIncoming ? saveRadiusBonus : idleRadiusBonus);
+    if (d < saveRadius && ball.z < 60 && k.kickCooldown <= 0) {
+      // CPU keeper sometimes fumbles — only weak punch, ball doesn't go far
+      const targetX = isLeftKeeper ? W * 0.65 : W * 0.35;
+      const targetY = cy + (Math.random() - 0.5) * H * 0.5;
+      const dx = targetX - ball.x, dy = targetY - ball.y;
+      const dl = Math.hypot(dx, dy) || 1;
+      let punchPower = shotIncoming ? 15 : 12;
+      if (isCpuKeeper) punchPower *= 0.45; // weak fumble — ball drops short for rebounds
+      ball.vx = (dx / dl) * punchPower;
+      ball.vy = (dy / dl) * punchPower;
+      ball.vz = isCpuKeeper ? 3 : 6;
+      ball.spin = 0;
+      k.kickCooldown = isCpuKeeper ? 55 : 35;
+      state.lastTouchTeam = k.team;
+      flashSave(k);
+    }
+  }
+
+  function flashSave(k) {
+    const el = k === keeperYou ? keeperYouEl : keeperCpuEl;
+    el.classList.add('diving');
+    setTimeout(() => el.classList.remove('diving'), 220);
+  }
+
+  // ----- BALL PHYSICS -----
+  function updateBall(dt) {
+    // Friction depends on whether ball is in the air
+    const onGround = ball.z <= 0.01;
+    const friction = onGround ? 0.985 : 0.998;
+    ball.vx *= Math.pow(friction, dt);
+    ball.vy *= Math.pow(friction, dt);
+
+    // Curve from spin (Magnus): perpendicular accel
+    if (Math.abs(ball.spin) > 0.01) {
+      const sp = Math.hypot(ball.vx, ball.vy);
+      if (sp > 0.5) {
+        const perpX = -ball.vy / sp;
+        const perpY = ball.vx / sp;
+        ball.vx += perpX * ball.spin * dt;
+        ball.vy += perpY * ball.spin * dt;
+        ball.spin *= Math.pow(0.97, dt);
+      }
+    }
+
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+
+    // Vertical motion (z)
+    ball.vz -= 0.45 * dt;
+    ball.z += ball.vz * dt;
+    if (ball.z < 0) {
+      ball.z = 0;
+      ball.vz *= -0.45; // bounce damp
+      if (Math.abs(ball.vz) < 1.2) ball.vz = 0;
+    }
+
+    // Visual rotation
+    ball.rot += Math.hypot(ball.vx, ball.vy) * 0.02 * dt;
+
+    // Goal detection
+    const cy = H / 2;
+    const inGoalMouth = ball.y > cy - GOAL_HALF && ball.y < cy + GOAL_HALF;
+    const ballLowEnough = ball.z < 80;
+
+    if (state.goalCooldown <= 0 && ballLowEnough) {
+      if (ball.x > fieldRight() - 4 && inGoalMouth) {
+        if (state.shootout.active) {
+          // During a shootout, only count if it's the team's own kick going into the right goal
+          if (state.shootout.turn === 'you') recordPenaltyResult('goal');
+          return;
+        }
+        state.youScore++;
+        state.coins += hasPass('doublecoin') ? 20 : 10;
+        state.gems  += hasPass('pboots') ? 3 : 1;
+        showGoal('GOAL!', '#4da6ff');
+        celebrateGoal('you');
+        saveGame();
+        renderHud();
+        resetPositions();
+        return;
+      }
+      if (ball.x < FIELD_LEFT + 4 && inGoalMouth) {
+        if (state.shootout.active) {
+          if (state.shootout.turn === 'cpu') recordPenaltyResult('goal');
+          return;
+        }
+        state.cpuScore++;
+        showGoal(`${KITS[state.cpuCountry].label} SCORE`, '#ff6b6b');
+        celebrateGoal('cpu');
+        renderHud();
+        resetPositions();
+        return;
+      }
+    } else if (state.goalCooldown > 0) {
+      state.goalCooldown -= dt;
+    }
+
+    // ----- OUT OF BOUNDS -----
+    // Touchlines (top / bottom): throw-in to opposing team
+    if (ball.y < 14 - BALL_R) {
+      const possession = (state.lastTouchTeam === 'you') ? 'cpu' : 'you';
+      ballOut('THROW-IN', ball.x, 30, possession);
+      return;
+    }
+    if (ball.y > H - 4 + BALL_R) {
+      const possession = (state.lastTouchTeam === 'you') ? 'cpu' : 'you';
+      ballOut('THROW-IN', ball.x, H - 30, possession);
+      return;
+    }
+    // End lines (left / right) outside the goal mouth: corner or goal kick
+    if (!inGoalMouth) {
+      if (ball.x < FIELD_LEFT - BALL_R) {
+        // Out behind LEFT goal line
+        if (state.lastTouchTeam === 'you') {
+          // your team last touched -> CPU corner kick at one of the left corners
+          const cornerY = ball.y < cy ? 24 : H - 24;
+          ballOut('CORNER', FIELD_LEFT + 20, cornerY, 'cpu');
+        } else {
+          // CPU last touched -> goal kick to your team
+          ballOut('GOAL KICK', FIELD_LEFT + 80, cy, 'you');
+        }
+        return;
+      }
+      if (ball.x > fieldRight() + BALL_R) {
+        // Out behind RIGHT goal line
+        if (state.lastTouchTeam === 'cpu') {
+          // CPU last touched -> YOUR corner kick at one of the right corners
+          const cornerY = ball.y < cy ? 24 : H - 24;
+          ballOut('CORNER', fieldRight() - 20, cornerY, 'you');
+        } else {
+          // your team last touched -> CPU goal kick
+          ballOut('GOAL KICK', fieldRight() - 80, cy, 'cpu');
+        }
+        return;
+      }
+    } else {
+      // Goal mouth — let ball drift slightly off the field edge before clamping
+      if (ball.x < -40) { ball.x = -40; ball.vx = 0; }
+      if (ball.x > W + 40) { ball.x = W + 40; ball.vx = 0; }
+    }
+  }
+
+  // Place ball for a dead-ball restart and assign possession
+  function ballOut(label, x, y, possession) {
+    ball.x = x; ball.y = y;
+    ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0; ball.spin = 0;
+    state.lastTouchTeam = possession;
+    state.goalCooldown = 20; // small grace before goal detection
+    // Dead-ball protection: CPU can't tackle / strip you until you take the kick.
+    if (possession === 'you') state.deadBallProtect = true;
+
+    // YOU automatically take your own corners — teleport CF to the corner spot
+    if (label === 'CORNER' && possession === 'you' && !player.sentOff) {
+      const cy = H / 2;
+      // Place CF just inside the pitch from the ball, facing the penalty area
+      player.x = x;
+      player.y = y + (y < cy ? 40 : -40);
+      player.vx = player.vy = 0;
+      player.hasBall = false;
+      const goalAreaX = fieldRight() - 100;
+      const goalAreaY = cy;
+      const dx = goalAreaX - player.x;
+      const dy = goalAreaY - player.y;
+      const dl = Math.hypot(dx, dy) || 1;
+      player.facingX = dx / dl;
+      player.facingY = dy / dl;
+      // CM crashes the box for the cross
+      youMid.x = fieldRight() - 140;
+      youMid.y = cy;
+      youMid.vx = youMid.vy = 0;
+    }
+
+    showOut(label, possession === 'you' ? '#4da6ff' : '#ff6b6b');
+  }
+
+  // ----- PLAYER ↔ BALL CONTACT -----
+  function handlePlayerBallContact(p) {
+    // Player's jump z extends reach; otherwise ball above ~28 is unreachable
+    const reach = (p === player ? p.z : 0) + 28;
+    if (ball.z > reach) return;
+    const dx = ball.x - p.x;
+    const dy = ball.y - p.y;
+    const d = Math.hypot(dx, dy);
+    const minDist = p.r + BALL_R;
+    if (d < minDist) {
+      const nx = dx / (d || 1), ny = dy / (d || 1);
+      ball.x = p.x + nx * minDist;
+      ball.y = p.y + ny * minDist;
+      if (p === player && (p.bicycling || 0) > 0) {
+        // BICYCLE KICK volley — massive forward power with high loft
+        const fx = p.facingX || 1, fy = p.facingY || 0;
+        const power = 32 * getPowerMult();
+        ball.vx = fx * power;
+        ball.vy = fy * power;
+        ball.vz = 9;
+        ball.spin = 0;
+        player.hasBall = false;
+        showBanner('BICYCLE!', '#ffeb3b', 56, 900);
+      } else if (p === player && p.tackling > 0) {
+        // Clean tackle on ball — punt it forward strongly
+        ball.vx = (p.vx + nx * 4) * 1.4;
+        ball.vy = (p.vy + ny * 4) * 1.4;
+        ball.vz = 4;
+        p.tackleBallHit = true;
+        player.hasBall = false;
+      } else if (p === player && !state.kicking && ball.z < 5 && !player.sentOff) {
+        // Take possession — ball "sticks" to you and you can carry it
+        player.hasBall = true;
+        const off = player.r + BALL_R + 2;
+        ball.x = player.x + player.facingX * off;
+        ball.y = player.y + player.facingY * off;
+        ball.vx = player.vx;
+        ball.vy = player.vy;
+        ball.z = 0; ball.vz = 0; ball.spin = 0;
+      } else if (p.team === 'cpu' && (p.tackling || 0) > 0) {
+        // CPU clean tackle — punt ball forward toward CPU's attacking goal (LEFT)
+        const tx = FIELD_LEFT + 60, ty = H / 2;
+        const tdx = tx - ball.x, tdy = ty - ball.y;
+        const tdl = Math.hypot(tdx, tdy) || 1;
+        ball.vx = (tdx / tdl) * 13;
+        ball.vy = (tdy / tdl) * 13;
+        ball.vz = 4;
+        p.tackleBallHit = true;
+        player.hasBall = false;
+      } else {
+        // Normal dribble for other players (CPU, MATE, keepers)
+        const transfer = 0.55;
+        ball.vx = ball.vx * 0.3 + (p.vx + nx * 1.6) * transfer;
+        ball.vy = ball.vy * 0.3 + (p.vy + ny * 1.6) * transfer;
+        // If anyone else touches the ball, you lose possession
+        if (p !== player) player.hasBall = false;
+      }
+      ball.spin *= 0.3;
+      p.lastTouch = 1;
+      state.lastTouchTeam = p.team;
+    } else if (p === player && hasPass('magnet') && d < 90 && ball.z < 10) {
+      const pull = 0.06 * 1; // gentle
+      ball.vx += (p.x - ball.x) * pull * 0.05;
+      ball.vy += (p.y - ball.y) * pull * 0.05;
+    }
+  }
+
+  // ----- PLAYER ↔ PLAYER COLLISION (soft) -----
+  function handlePlayerCollisions() {
+    for (let i = 0; i < allPlayers.length; i++) {
+      for (let j = i + 1; j < allPlayers.length; j++) {
+        const a = allPlayers[i], b = allPlayers[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.hypot(dx, dy);
+        const minD = a.r + b.r;
+        if (d < minD && d > 0) {
+          // FOUL: player tackling and hits a CPU outfielder without first hitting ball
+          const tackleHit = (a === player && player.tackling > 0 && b.team === 'cpu')
+                         || (b === player && player.tackling > 0 && a.team === 'cpu');
+          if (tackleHit && !player.tackleBallHit) {
+            const fx = (a.x + b.x) / 2;
+            const fy = (a.y + b.y) / 2;
+            foulCalled(fx, fy);
+            return;
+          }
+          // FOUL ON YOU: a CPU is tackling and hits you without hitting the ball first
+          const cpuFoul =
+            (a === player && b.team === 'cpu' && (b.tackling || 0) > 0 && !b.tackleBallHit)
+         || (b === player && a.team === 'cpu' && (a.tackling || 0) > 0 && !a.tackleBallHit);
+          if (cpuFoul) {
+            const cpuOffender = (a === player) ? b : a;
+            const fx = (a.x + b.x) / 2;
+            const fy = (a.y + b.y) / 2;
+            foulOnPlayer(cpuOffender, fx, fy);
+            return;
+          }
+          const overlap = (minD - d) / 2;
+          const nx = dx / d, ny = dy / d;
+          a.x -= nx * overlap; a.y -= ny * overlap;
+          b.x += nx * overlap; b.y += ny * overlap;
+          a.vx *= 0.7; a.vy *= 0.7;
+          b.vx *= 0.7; b.vy *= 0.7;
+        }
+      }
+    }
+  }
+
+  function foulCalled(x, y) {
+    const cy = H / 2;
+    const PEN_BOX_W = 130, PEN_BOX_H = 320;
+    const PEN_SPOT_X = FIELD_LEFT + 100;
+    // Penalty if foul was inside YOUR (left) penalty box
+    const isPenalty = (x < FIELD_LEFT + PEN_BOX_W) &&
+                      (y > cy - PEN_BOX_H / 2) && (y < cy + PEN_BOX_H / 2);
+
+    // Award card. Yellow on first foul, red on second.
+    player.cards = (player.cards || 0) + 1;
+    renderCards();
+    const cardLabel = player.cards >= 2 ? 'RED CARD!' : 'YELLOW CARD';
+    const cardColor = player.cards >= 2 ? '#e53935' : '#ffeb3b';
+
+    // End tackle and reset state
+    player.tackling = 0;
+    player.tackleBallHit = false;
+    player.tackleCooldown = isPenalty ? 120 : 90;
+    endTackleVisual();
+
+    if (isPenalty) {
+      // Set up penalty: ball on the penalty spot, CPU striker as taker, others out of box
+      ball.x = PEN_SPOT_X; ball.y = cy;
+      ball.vx = ball.vy = ball.vz = ball.spin = 0; ball.z = 0;
+      cpuStriker.x = PEN_SPOT_X + 35; cpuStriker.y = cy;
+      cpuStriker.vx = cpuStriker.vy = 0;
+      cpuMid.x = FIELD_LEFT + 260; cpuMid.y = cy + 80; cpuMid.vx = cpuMid.vy = 0;
+      keeperYou.x = FIELD_LEFT + 16; keeperYou.y = cy; keeperYou.vx = keeperYou.vy = 0;
+      // Push your outfielders out of the box (no double-fouling)
+      youMid.x = FIELD_LEFT + 280; youMid.y = cy + 110; youMid.vx = youMid.vy = 0;
+      if (!player.sentOff) {
+        player.x = FIELD_LEFT + 260; player.y = cy - 110; player.vx = player.vy = 0;
+      }
+      ref.x = PEN_SPOT_X + 70; ref.y = cy - 70;
+      state.lastTouchTeam = 'cpu';
+      state.goalCooldown = 40;
+      showBanner('PENALTY!', '#ffeb3b', 80, 1400);
+      setTimeout(() => showBanner(cardLabel, cardColor, 56, 1100), 1400);
+    } else {
+      // Free kick to CPU at the spot
+      ball.x = clamp(x, FIELD_LEFT + 30, fieldRight() - 30);
+      ball.y = clamp(y, 30, H - 30);
+      ball.vx = ball.vy = ball.vz = ball.spin = 0; ball.z = 0;
+      state.lastTouchTeam = 'cpu';
+      state.goalCooldown = 30;
+      ref.x = x + 60; ref.y = y - 40;
+      showFoul();
+      setTimeout(() => showBanner(cardLabel, cardColor, 56, 1000), 1100);
+    }
+
+    // Red card -> send off
+    if (player.cards >= 2 && !player.sentOff) {
+      sendPlayerOff();
+    }
+  }
+
+  function foulOnPlayer(c, x, y) {
+    const cy = H / 2;
+    const PEN_BOX_W = 130, PEN_BOX_H = 320;
+    const PEN_SPOT_X = fieldRight() - 100;
+    // Penalty if foul is inside CPU's defensive (right) penalty box
+    const isPenalty = (x > fieldRight() - PEN_BOX_W) &&
+                      (y > cy - PEN_BOX_H / 2) && (y < cy + PEN_BOX_H / 2);
+
+    c.cards = (c.cards || 0) + 1;
+    renderCpuCards(c);
+    const cardLabel = c.cards >= 2 ? 'RED CARD!' : 'YELLOW CARD';
+    const cardColor = c.cards >= 2 ? '#e53935' : '#ffeb3b';
+
+    // End CPU tackle state
+    c.tackling = 0;
+    c.tackleBallHit = false;
+    c.tackleCooldown = isPenalty ? 120 : 90;
+    setCpuTacklingVisual(c, false);
+
+    if (isPenalty) {
+      // Penalty for YOU
+      ball.x = PEN_SPOT_X; ball.y = cy;
+      ball.vx = ball.vy = ball.vz = ball.spin = 0; ball.z = 0;
+      if (!player.sentOff) {
+        player.x = PEN_SPOT_X - 40; player.y = cy;
+        player.vx = player.vy = 0;
+        player.facingX = 1; player.facingY = 0;
+        player.hasBall = false;
+      }
+      youMid.x = fieldRight() - 280; youMid.y = cy + 110; youMid.vx = youMid.vy = 0;
+      keeperCpu.x = fieldRight() - 16; keeperCpu.y = cy; keeperCpu.vx = keeperCpu.vy = 0;
+      // Push CPU outfielders out of the box
+      if (!cpuStriker.sentOff) { cpuStriker.x = fieldRight() - 260; cpuStriker.y = cy - 110; cpuStriker.vx = cpuStriker.vy = 0; }
+      if (!cpuMid.sentOff)     { cpuMid.x     = fieldRight() - 280; cpuMid.y     = cy + 110; cpuMid.vx     = cpuMid.vy     = 0; }
+      ref.x = PEN_SPOT_X - 70; ref.y = cy - 70;
+      state.lastTouchTeam = 'you';
+      state.goalCooldown = 40;
+      state.deadBallProtect = true;
+      showBanner('PENALTY!', '#ffeb3b', 80, 1400);
+      setTimeout(() => showBanner(cardLabel, cardColor, 56, 1100), 1400);
+    } else {
+      // Free kick to YOU at the spot
+      ball.x = clamp(x, FIELD_LEFT + 30, fieldRight() - 30);
+      ball.y = clamp(y, 30, H - 30);
+      ball.vx = ball.vy = ball.vz = ball.spin = 0; ball.z = 0;
+      state.lastTouchTeam = 'you';
+      state.goalCooldown = 30;
+      ref.x = x - 60; ref.y = y - 40;
+      showFoul();
+      setTimeout(() => showBanner(cardLabel, cardColor, 56, 1000), 1100);
+    }
+
+    // Red card -> CPU player sent off
+    if (c.cards >= 2 && !c.sentOff) sendCpuOff(c);
+  }
+
+  function sendCpuOff(c) {
+    c.sentOff = true;
+    c.tackling = 0;
+    c.tackleCooldown = 99999;
+    setCpuTacklingVisual(c, false);
+    const el = (c === cpuStriker) ? cpuStrikerEl : cpuMidEl;
+    el.classList.add('sent-off');
+    // Park CPU player off the pitch
+    c.x = -100; c.y = 60;
+    c.vx = c.vy = 0;
+  }
+
+  function sendPlayerOff() {
+    player.sentOff = true;
+    player.hasBall = false;
+    playerEl.classList.add('sent-off');
+    // Park them on the sideline
+    player.x = W - 30;
+    player.y = 30;
+    player.vx = player.vy = 0;
+  }
+
+  function update(dt) {
+    updatePlayer(dt);
+    updateYouMid(dt);
+    updateCpuTeam(dt);
+    updateKeeper(keeperYou, FIELD_LEFT + 26, dt);
+    updateKeeper(keeperCpu, fieldRight() - 26, dt);
+    updateRef(dt);
+    updateBall(dt);
+
+    // Contacts
+    for (const p of allPlayers) handlePlayerBallContact(p);
+    handlePlayerCollisions();
+
+    // Decrement last touch markers
+    for (const p of allPlayers) if (p.lastTouch > 0) p.lastTouch -= dt * 0.05;
+
+    // Game timer — only re-render HUD when the displayed second changes
+    state.timeLeft = Math.max(0, state.timeLeft - dt);
+    const sec = Math.floor(state.timeLeft / 60);
+    if (sec !== state._lastSec) { state._lastSec = sec; renderHud(); }
+    // Halftime at 45:00 (half of 90:00)
+    if (!state.halftimeReached && state.timeLeft <= 45 * 60) {
+      state.halftimeReached = true;
+      startHalftime();
+    }
+    if (state.timeLeft <= 0 && !state.gameOver) endGame();
+  }
+
+  function endGame() {
+    // If drawn -> go to penalty shootout instead of finishing
+    if (state.youScore === state.cpuScore) {
+      startShootout();
+      return;
+    }
+    finishMatch(state.youScore > state.cpuScore ? 'win' : 'loss', null);
+  }
+
+  function finishMatch(result, penText) {
+    state.gameOver = true;
+    state.paused = true;
+    const ftEl = document.getElementById('fulltime');
+    const resEl = document.getElementById('ft-result');
+    const scoreEl = document.getElementById('ft-score');
+    const coinsEl = document.getElementById('ft-coins');
+
+    let bonus = 0;
+    if (result === 'win') {
+      resEl.textContent = penText ? `${KITS[state.youCountry].label} WIN! (PEN)` : `${KITS[state.youCountry].label} WIN!`;
+      resEl.className = 'ft-result win';
+      bonus = 100 + state.youScore * 25;
+    } else if (result === 'loss') {
+      resEl.textContent = penText ? `${KITS[state.cpuCountry].label} WIN (PEN)` : `${KITS[state.cpuCountry].label} WIN`;
+      resEl.className = 'ft-result loss';
+      bonus = 20;
+    } else {
+      resEl.textContent = 'DRAW';
+      resEl.className = 'ft-result draw';
+      bonus = 50;
+    }
+    if (hasPass('doublecoin')) bonus *= 2;
+    state.coins += bonus;
+    // Premium currency awarded on match outcome
+    let gemBonus = 0;
+    if (result === 'win')  gemBonus = 5;
+    else if (result === 'loss') gemBonus = 0;
+    else                   gemBonus = 1; // draw
+    state.gems += gemBonus;
+    saveGame();
+
+    const main = `<span class="you">${KITS[state.youCountry].label} ${state.youScore}</span> &nbsp;-&nbsp; <span class="cpu">${state.cpuScore} ${KITS[state.cpuCountry].label}</span>`;
+    scoreEl.innerHTML = penText ? `${main}<div style="font-size:18px;margin-top:6px;opacity:0.85">PENS ${penText}</div>` : main;
+    coinsEl.textContent = `+${bonus} bonus coins`;
+    ftEl.classList.add('show');
+    renderHud();
+  }
+
+  // ============ PENALTY SHOOTOUT ============
+  function entityToEl(p) {
+    if (p === player) return playerEl;
+    if (p === youMid) return youMidEl;
+    if (p === keeperYou) return keeperYouEl;
+    if (p === cpuStriker) return cpuStrikerEl;
+    if (p === cpuMid) return cpuMidEl;
+    if (p === keeperCpu) return keeperCpuEl;
+    return null;
+  }
+  function setHidden(p, hidden) {
+    const el = entityToEl(p);
+    if (el) el.style.display = hidden ? 'none' : '';
+    p.hidden = hidden;
+  }
+
+  function startShootout() {
+    state.shootout.active = true;
+    state.shootout.phase = 'banner';
+    state.shootout.phaseTimer = 100;
+    state.shootout.turn = 'you';
+    state.shootout.youAtt = [];
+    state.shootout.cpuAtt = [];
+    document.getElementById('shootout-panel').classList.add('show');
+    showBanner('PENALTY SHOOTOUT', '#ffeb3b', 56, 1700);
+    renderShootoutPanel();
+  }
+
+  function setupNextPenalty() {
+    const cy = H / 2;
+    const so = state.shootout;
+    const isYou = so.turn === 'you';
+    // Reset ball
+    ball.vx = ball.vy = ball.vz = ball.spin = 0; ball.z = 0;
+    // Hide all outfielders/keepers, show only the active two
+    setHidden(youMid, true);
+    setHidden(cpuMid, true);
+    if (isYou) {
+      setHidden(player, false);
+      setHidden(keeperCpu, false);
+      setHidden(keeperYou, true);
+      setHidden(cpuStriker, true);
+      ball.x = fieldRight() - 100; ball.y = cy;
+      if (player.sentOff) {
+        // Sent-off CF can't take pen — auto-miss
+        recordPenaltyResult('miss');
+        return;
+      }
+      player.x = fieldRight() - 140; player.y = cy;
+      player.vx = player.vy = 0;
+      keeperCpu.x = fieldRight() - 16; keeperCpu.y = cy;
+      keeperCpu.vx = keeperCpu.vy = 0;
+    } else {
+      setHidden(cpuStriker, false);
+      setHidden(keeperYou, false);
+      setHidden(keeperCpu, true);
+      setHidden(player, true);
+      ball.x = FIELD_LEFT + 100; ball.y = cy;
+      cpuStriker.x = FIELD_LEFT + 140; cpuStriker.y = cy;
+      cpuStriker.vx = cpuStriker.vy = 0;
+      cpuStriker.kickCooldown = 30;
+      keeperYou.x = FIELD_LEFT + 16; keeperYou.y = cy;
+      keeperYou.vx = keeperYou.vy = 0;
+    }
+    // Park ref near halfway
+    ref.x = W / 2 + 60; ref.y = cy - 60;
+    so.phase = 'setup';
+    so.phaseTimer = 70;
+    state.lastTouchTeam = isYou ? 'you' : 'cpu';
+    state.goalCooldown = 0;
+    showBanner(isYou ? `${KITS[state.youCountry].label} SHOOT` : `${KITS[state.cpuCountry].label} SHOOT`, isYou ? '#4da6ff' : '#ff6b6b', 44, 1100);
+    renderShootoutPanel();
+  }
+
+  function shootoutTick(dt) {
+    const so = state.shootout;
+    so.phaseTimer -= dt;
+    if (so.phase === 'banner') {
+      if (so.phaseTimer <= 0) setupNextPenalty();
+      return;
+    }
+    if (so.phase === 'setup') {
+      if (so.phaseTimer <= 0) {
+        so.phase = 'live';
+        so.phaseTimer = 360; // ~6s window to take the kick
+      }
+      return;
+    }
+    if (so.phase === 'live') {
+      if (so.turn === 'cpu') driveCpuPenalty(dt);
+      if (so.phaseTimer <= 0) recordPenaltyResult('miss');
+      return;
+    }
+    if (so.phase === 'result') {
+      if (so.phaseTimer <= 0) {
+        // Switch turn
+        so.turn = (so.turn === 'you') ? 'cpu' : 'you';
+        if (isShootoutDecided()) finishShootout();
+        else setupNextPenalty();
+      }
+      return;
+    }
+  }
+
+  function recordPenaltyResult(outcome) {
+    const so = state.shootout;
+    if (so.phase !== 'live' && so.phase !== 'setup') return;
+    if (so.turn === 'you') so.youAtt.push(outcome);
+    else                   so.cpuAtt.push(outcome);
+    so.phase = 'result';
+    so.phaseTimer = 80;
+    showBanner(outcome === 'goal' ? 'SCORED!' : 'MISSED!',
+               outcome === 'goal' ? '#4caf50' : '#ff5252', 60, 1100);
+    renderShootoutPanel();
+  }
+
+  function isShootoutDecided() {
+    const y = state.shootout.youAtt;
+    const c = state.shootout.cpuAtt;
+    const yG = y.filter(o => o === 'goal').length;
+    const cG = c.filter(o => o === 'goal').length;
+    const yLeft = Math.max(0, 5 - y.length);
+    const cLeft = Math.max(0, 5 - c.length);
+    // Within first 5: decided if leader can't be caught
+    if (y.length < 5 || c.length < 5) {
+      if (yG > cG + cLeft) return true;
+      if (cG > yG + yLeft) return true;
+      return false;
+    }
+    // After 5 each: sudden death — both teams must have taken same count
+    if (y.length === c.length && yG !== cG) return true;
+    return false;
+  }
+
+  function finishShootout() {
+    const so = state.shootout;
+    so.active = false;
+    so.phase = 'done';
+    document.getElementById('shootout-panel').classList.remove('show');
+    const yG = so.youAtt.filter(o => o === 'goal').length;
+    const cG = so.cpuAtt.filter(o => o === 'goal').length;
+    // Restore visibility for any subsequent replay
+    setHidden(youMid, false); setHidden(cpuMid, false);
+    setHidden(keeperYou, false); setHidden(keeperCpu, false);
+    setHidden(player, false); setHidden(cpuStriker, false);
+    finishMatch(yG > cG ? 'win' : 'loss', `${yG}-${cG}`);
+  }
+
+  function driveCpuPenalty(dt) {
+    // Walk to ball, then take a shot at the LEFT goal
+    const tx = ball.x + 25;
+    const ty = ball.y;
+    steerToward(cpuStriker, tx, ty, 4.2, dt, 0.28);
+    if (cpuStriker.kickCooldown > 0) cpuStriker.kickCooldown -= dt;
+    if (dist(cpuStriker, ball) < 28 && cpuStriker.kickCooldown <= 0) {
+      const cy = H / 2;
+      const aimY = cy + (Math.random() - 0.5) * (GOAL_HALF * 1.2);
+      aiKick(cpuStriker, FIELD_LEFT - 10, aimY, 14 + Math.random() * 3, 4, 0.30);
+    }
+  }
+
+  function renderShootoutPanel() {
+    const so = state.shootout;
+    const youDots = document.getElementById('so-you');
+    const cpuDots = document.getElementById('so-cpu');
+    const slots = Math.max(5, so.youAtt.length, so.cpuAtt.length);
+    function render(container, atts, isTurn) {
+      container.innerHTML = '';
+      for (let i = 0; i < slots; i++) {
+        const d = document.createElement('div');
+        d.className = 'so-dot';
+        if (atts[i] === 'goal') d.classList.add('goal');
+        else if (atts[i] === 'miss') d.classList.add('miss');
+        else if (i === atts.length && isTurn && so.phase !== 'result') d.classList.add('next');
+        container.appendChild(d);
+      }
+    }
+    render(youDots, so.youAtt, so.turn === 'you');
+    render(cpuDots, so.cpuAtt, so.turn === 'cpu');
+  }
+
+  function replay() {
+    state.youScore = 0;
+    state.cpuScore = 0;
+    state.timeLeft = 90 * 60;
+    state.gameOver = false;
+    state.paused = false;
+    state.halftimePause = false;
+    state.halftimeReached = false;
+    state.lastTouchTeam = null;
+    // Reset cards / sent-off
+    player.cards = 0;
+    player.sentOff = false;
+    playerEl.classList.remove('sent-off');
+    renderCards();
+    cpuStriker.cards = 0; cpuStriker.sentOff = false; cpuStriker.tackleCooldown = 0;
+    cpuMid.cards = 0;     cpuMid.sentOff = false;     cpuMid.tackleCooldown = 0;
+    cpuStrikerEl.classList.remove('sent-off');
+    cpuMidEl.classList.remove('sent-off');
+    renderCpuCards(cpuStriker); renderCpuCards(cpuMid);
+    document.getElementById('fulltime').classList.remove('show');
+    resetPositions();
+    renderHud();
+  }
+
+  document.getElementById('ft-replay').addEventListener('click', replay);
+
+  // ----- RENDER -----
+  function placeEntity(el, p) {
+    el.style.left = p.x + 'px';
+    el.style.top  = p.y + 'px';
+  }
+  function render() {
+    placeEntity(playerEl, player);
+    playerEl.classList.toggle('has-ball', !!player.hasBall);
+    // Lift player visually when jumping
+    playerEl.style.top = (player.y - player.z) + 'px';
+    playerEl.style.filter = player.z > 0
+      ? `drop-shadow(0 ${4 + player.z * 0.3}px ${4 + player.z * 0.2}px rgba(0,0,0,0.55))`
+      : '';
+    placeEntity(youMidEl, youMid);
+    placeEntity(keeperYouEl, keeperYou);
+    placeEntity(cpuStrikerEl, cpuStriker);
+    placeEntity(cpuMidEl, cpuMid);
+    placeEntity(keeperCpuEl, keeperCpu);
+    placeEntity(refEl, ref);
+
+    // Ball with z (offset upward) and shadow at ground position
+    ballEl.style.left = ball.x + 'px';
+    ballEl.style.top  = (ball.y - ball.z) + 'px';
+    ballEl.style.transform = `translate(-50%, -50%) rotate(${ball.rot}rad) scale(${1 + ball.z * 0.005})`;
+    ballShadowEl.style.left = ball.x + 'px';
+    ballShadowEl.style.top  = ball.y + 'px';
+    const shadowScale = 1 - Math.min(0.6, ball.z * 0.006);
+    ballShadowEl.style.transform = `translate(-50%, -50%) scale(${shadowScale})`;
+    ballShadowEl.style.opacity = (1 - Math.min(0.6, ball.z * 0.005)).toFixed(2);
+  }
+
+  // ============ TEAM PICKER ============
+  // Map of country -> kit colors used in dynamic team swap
+  const KITS = {
+    argentina: {
+      torso: '#75aadb', sleeve: '#75aadb', gkTorso: '#1a1a1a',
+      shorts: '#1a1a1a', sock: '#75aadb', sockBand: '#ffffff',
+      numberColor: '#ffffff', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.6)',
+      stripes: true,    // light blue + white vertical stripes
+      label: 'ARGENTINA', short: 'ARG',
+    },
+    portugal: {
+      torso: '#a3132c', sleeve: '#1c5b2c', gkTorso: '#f4c542',
+      shorts: '#1c5b2c', sock: '#a3132c', sockBand: '#f4c542',
+      numberColor: '#f4c542', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.6)',
+      label: 'PORTUGAL', short: 'POR',
+    },
+  };
+  function applyKits() {
+    const you = KITS[state.youCountry];
+    const cpu = KITS[state.cpuCountry];
+    // Build a dynamic stylesheet
+    let css = '';
+    // YOUR team (Argentina gets stripes, Portugal gets a red shirt with green band, etc.)
+    if (you.stripes) {
+      css += `#player .torso, #you-mid .torso {
+        background-color: ${you.torso};
+        background-image: repeating-linear-gradient(90deg, ${you.torso} 0 7px, #ffffff 7px 14px);
+      }`;
+    } else if (state.youCountry === 'portugal') {
+      css += `#player .torso, #you-mid .torso {
+        background-color: ${you.torso};
+        background-image: linear-gradient(180deg, ${you.torso} 0% 35%, #1c5b2c 35% 38%, ${you.torso} 38% 100%);
+      }`;
+    } else {
+      css += `#player .torso, #you-mid .torso { background-color: ${you.torso}; background-image: none; }`;
+    }
+    css += `#player .arm::before, #you-mid .arm::before { background-color: ${you.sleeve}; }`;
+    css += `#player .shorts, #you-mid .shorts { background-color: ${you.shorts}; }`;
+    css += `#player .leg, #you-mid .leg { background-image: linear-gradient(180deg, ${you.sock} 0% 4px, ${you.sockBand} 4px 6px, ${you.sock} 6px 60%, #1e1e1e 60% 100%); }`;
+    css += `#keeper-you .torso { background-color: ${you.gkTorso}; }`;
+    css += `#keeper-you .arm::before { background-color: ${you.gkTorso}; }`;
+    css += `#player .torso::after, #you-mid .torso::after { color: ${you.numberColor}; text-shadow: ${you.numberShadow}; }`;
+    // CPU team — Spain gets the gold band on the chest
+    if (cpu.stripes) {
+      // Argentina-style vertical sky-blue + white stripes
+      css += `#cpu-striker .torso, #cpu-mid .torso {
+        background-color: ${cpu.torso};
+        background-image: repeating-linear-gradient(90deg, ${cpu.torso} 0 7px, #ffffff 7px 14px);
+      }`;
+    } else if (state.cpuCountry === 'portugal') {
+      // Portugal: red shirt with green/gold trim
+      css += `#cpu-striker .torso, #cpu-mid .torso {
+        background-color: ${cpu.torso};
+        background-image: linear-gradient(180deg, ${cpu.torso} 0% 35%, #1c5b2c 35% 38%, ${cpu.torso} 38% 100%);
+      }`;
+    } else {
+      css += `#cpu-striker .torso, #cpu-mid .torso { background-color: ${cpu.torso}; background-image: none; }`;
+    }
+    css += `#cpu-striker .arm::before, #cpu-mid .arm::before { background-color: ${cpu.sleeve}; }`;
+    css += `#cpu-striker .shorts, #cpu-mid .shorts { background-color: ${cpu.shorts}; }`;
+    css += `#cpu-striker .leg, #cpu-mid .leg { background-image: linear-gradient(180deg, ${cpu.sock} 0% 4px, ${cpu.sockBand} 4px 6px, ${cpu.sock} 6px 60%, #1e1e1e 60% 100%); }`;
+    css += `#keeper-cpu .torso { background-color: ${cpu.gkTorso}; }`;
+    css += `#keeper-cpu .arm::before { background-color: ${cpu.gkTorso}; }`;
+    css += `#cpu-striker .torso::after, #cpu-mid .torso::after { color: ${cpu.numberColor}; text-shadow: ${cpu.numberShadow}; }`;
+
+    let styleEl = document.getElementById('kit-css');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'kit-css';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = css;
+
+    // Update score HUD + shootout labels
+    document.getElementById('score').innerHTML =
+      `<span class="you">${you.label} 0</span> &nbsp;-&nbsp; <span class="cpu">0 ${cpu.label}</span>` +
+      `<span class="timer" id="timer">90:00</span>`;
+    const soYou = document.querySelector('#shootout-panel .so-label.you');
+    const soCpu = document.querySelector('#shootout-panel .so-label.cpu');
+    if (soYou) soYou.textContent = you.short;
+    if (soCpu) soCpu.textContent = cpu.short;
+  }
+  function bannerYou(text)  { return text.replace('FRANCE', KITS[state.youCountry].label).replace('SPAIN', KITS[state.youCountry].label); }
+  function bannerCpu(text)  { return text.replace('FRANCE', KITS[state.cpuCountry].label).replace('SPAIN', KITS[state.cpuCountry].label); }
+
+  document.querySelectorAll('#team-picker .tp-team').forEach(el => {
+    el.addEventListener('click', () => {
+      const pick = el.dataset.team;
+      state.youCountry = pick;
+      state.cpuCountry = (pick === 'argentina') ? 'portugal' : 'argentina';
+      state.awaitingTeamPick = false;
+      applyKits();
+      document.getElementById('team-picker').classList.add('hide');
+    });
+  });
+
+  // ============ INIT ============
+  loadGame();        // restore coins, gems, and owned passes from previous sessions
+
+  // === OWNER DETECTION ===
+  // Only the game owner (the original player on this browser) gets perks/gifts.
+  // Anyone else who opens the page later starts with the default 100 coins and 0 passes.
+  // Detection: any pre-existing soccer-sim-* localStorage key marks this browser as the owner.
+  const OWNER_KEY = 'soccer-sim-owner-v1';
+  function isGameOwner() {
+    try {
+      if (localStorage.getItem(OWNER_KEY)) return true;
+      // Implicit owner: any non-default loaded state means this browser has played before.
+      if (state.coins > 100 || state.gems > 0 || passes.some(p => p.owned)) {
+        localStorage.setItem(OWNER_KEY, '1');
+        return true;
+      }
+      // Fallback: any prior soccer-sim-* localStorage key (covers very old saves)
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('soccer-sim-')) {
+          localStorage.setItem(OWNER_KEY, '1');
+          return true;
+        }
+      }
+    } catch (e) {}
+    return false;
+  }
+  const OWNER = isGameOwner();
+
+  // CLAIM button is always visible for you. (Other browsers still start with
+  // default state because localStorage save is per-browser.)
+
+  // ONE-TIME starter gift — owners only. New players start with the default 100 coins, 0 gems.
+  if (OWNER) {
+    const COMP_KEY = 'soccer-sim-compensated-v3';
+    try {
+      if (!localStorage.getItem(COMP_KEY)) {
+        state.coins = Math.max(state.coins, 1000);
+        state.gems  = Math.max(state.gems,  100);
+        saveGame();
+        localStorage.setItem(COMP_KEY, '1');
+      }
+    } catch (e) {}
+  }
+
+  drawFieldBoxes();
+  renderHud();
+  applyVipAura();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
