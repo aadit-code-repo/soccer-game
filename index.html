@@ -592,21 +592,25 @@
     position: absolute;
     top: 110px;
     right: 12px;
-    width: 56px;
-    height: 56px;
+    width: 70px;
+    height: 70px;
     background: rgba(0,0,0,0.55);
     border: 2px solid #4da6ff;
-    border-radius: 50%;
+    border-radius: 14px;
     color: #fff;
-    font-size: 22px;
+    font-size: 14px;
+    font-weight: 800;
     cursor: pointer;
     z-index: 20;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 2px;
     transition: transform 0.1s;
   }
+  #shield-btn .icon { font-size: 22px; }
   #shield-btn:hover { transform: scale(1.05); }
   #shield-btn.on {
     background: linear-gradient(180deg, #4da6ff, #1976d2);
@@ -668,13 +672,17 @@
     background: rgba(0,0,0,0.55);
     color: #fff;
     border: 1px solid rgba(255,255,255,0.2);
-    width: 44px;
+    min-width: 90px;
+    padding: 8px 12px;
     height: 44px;
     border-radius: 10px;
     cursor: pointer;
-    font-size: 18px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 1px;
     z-index: 20;
     display: flex;
+    gap: 6px;
     align-items: center;
     justify-content: center;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
@@ -834,18 +842,16 @@
     box-shadow: 0 3px 8px rgba(0,0,0,0.5);
   }
   .tp-team .name { font-size: 20px; font-weight: 900; letter-spacing: 1px; }
-  .tp-team[data-team="argentina"]:hover { border-color: #75aadb; background: #1a3550; }
-  .tp-team[data-team="portugal"]:hover  { border-color: #a3132c; background: #4a1320; }
-  /* Argentina flag: light-blue / white / light-blue with sun */
-  .flag.argentina {
-    background:
-      radial-gradient(circle at center, #f4c542 0 8px, transparent 9px),
-      linear-gradient(180deg, #75aadb 0 33.3%, #ffffff 33.3% 66.6%, #75aadb 66.6% 100%);
+  .tp-team:hover { border-color: #4da6ff; background: #142a55; }
+  #tp-reroll {
+    margin-top: 18px;
+    background: linear-gradient(180deg, #66bb6a, #2e7d32);
+    color: #fff; border: none; padding: 10px 18px;
+    font-size: 14px; font-weight: 800; letter-spacing: 1px;
+    border-radius: 10px; cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.45);
   }
-  /* Portugal flag: green / red vertical */
-  .flag.portugal {
-    background: linear-gradient(90deg, #1c5b2c 0 40%, #a3132c 40% 100%);
-  }
+  #tp-reroll:hover { transform: translateY(-2px); }
 
   /* Full-time overlay */
   #fulltime {
@@ -1082,7 +1088,28 @@
     z-index: 20;
     pointer-events: none;
   }
-  #joystick {
+  /* Joystick is hidden — replaced by tap-to-move */
+  #joystick { display: none !important; }
+  /* Touch target indicator ring */
+  #touch-target {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(77,166,255,0.85);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(77,166,255,0.2) 0%, rgba(77,166,255,0) 70%);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 25;
+    display: none;
+    animation: touchRing 0.7s ease-out infinite;
+  }
+  #touch-target.show { display: block; }
+  @keyframes touchRing {
+    0%   { transform: translate(-50%, -50%) scale(0.8); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.4; }
+  }
+  #joystick-disabled-placeholder {
     position: absolute;
     left: 30px;
     bottom: 0;
@@ -1116,6 +1143,21 @@
     color: #fff;
     font-weight: 700;
     font-size: 18px;
+    pointer-events: auto;
+    touch-action: none;
+  }
+  #jump-btn {
+    position: absolute;
+    right: 145px;
+    bottom: 18px;
+    width: 70px;
+    height: 70px;
+    background: rgba(77,166,255,0.7);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
     pointer-events: auto;
     touch-action: none;
   }
@@ -1261,19 +1303,20 @@
   <button id="claim-btn" title="Claim 1000 coins + 100 gems">🎁 CLAIM</button>
 
   <!-- Anti-tackle shield button -->
-  <button id="shield-btn" title="Toggle anti-tackle shield">🛡️</button>
+  <button id="shield-btn" title="Toggle anti-tackle shield"><span class="icon">🛡️</span><span>SHIELD</span></button>
 
   <!-- Fullscreen button -->
-  <button id="fs-btn" title="Fullscreen (F11)">⛶</button>
+  <button id="fs-btn" title="Fullscreen (F11)"><span>⛶</span><span>FULL</span></button>
 
   <!-- Shop button -->
   <button id="shop-btn">SHOP</button>
 
   <!-- Mobile controls -->
   <div id="mobile-controls">
-    <div id="joystick"><div id="joystick-knob"></div></div>
     <button id="kick-btn">KICK</button>
+    <button id="jump-btn">JUMP</button>
   </div>
+  <div id="touch-target"></div>
 
   <!-- Shootout scoreboard -->
   <div id="shootout-panel">
@@ -1286,17 +1329,9 @@
   <div id="team-picker">
     <div class="tp-card">
       <h2>CHOOSE YOUR TEAM</h2>
-      <div class="tp-vs">ARGENTINA 🇦🇷  vs  🇵🇹 PORTUGAL</div>
-      <div class="tp-options">
-        <div class="tp-team" data-team="argentina">
-          <div class="flag argentina"></div>
-          <div class="name">ARGENTINA</div>
-        </div>
-        <div class="tp-team" data-team="portugal">
-          <div class="flag portugal"></div>
-          <div class="name">PORTUGAL</div>
-        </div>
-      </div>
+      <div class="tp-vs" id="tp-vs">— vs —</div>
+      <div class="tp-options" id="tp-options"></div>
+      <button id="tp-reroll">🎲 NEW MATCHUP</button>
     </div>
   </div>
 
@@ -1466,45 +1501,59 @@
     if (k === ' ') { releaseKick(); }
   });
 
-  // Mobile joystick
-  const joystick = document.getElementById('joystick');
-  const knob = document.getElementById('joystick-knob');
-  let joyTouchId = null, joyDir = { x: 0, y: 0 };
-  joystick.addEventListener('touchstart', handleJoyStart, { passive: false });
-  joystick.addEventListener('touchmove', handleJoyMove, { passive: false });
-  joystick.addEventListener('touchend', handleJoyEnd);
-  function handleJoyStart(e) {
-    e.preventDefault();
-    if (joyTouchId === null) joyTouchId = e.changedTouches[0].identifier;
-    handleJoyMove(e);
+  // Mobile touch controls — tap anywhere on the field; your player runs toward
+  // your finger. Drag to keep changing direction. Lift finger to stop.
+  let touchTargetId = null;
+  let touchTarget = null; // {x, y} in screen coords, or null
+  function isUiElement(el) {
+    if (!el) return false;
+    return el.closest('#shop-btn, #shield-btn, #fs-btn, #claim-btn, #shop, #kick-btn, #hud, #team-picker, #fulltime') !== null;
   }
-  function handleJoyMove(e) {
+  function setTouchTarget(t) {
+    touchTarget = { x: t.clientX, y: t.clientY };
+  }
+  game.addEventListener('touchstart', (e) => {
+    if (state.awaitingTeamPick || state.paused) return;
+    if (isUiElement(e.target)) return;
     e.preventDefault();
+    const t = e.changedTouches[0];
+    touchTargetId = t.identifier;
+    setTouchTarget(t);
+  }, { passive: false });
+  game.addEventListener('touchmove', (e) => {
+    if (touchTargetId === null) return;
     for (const t of e.changedTouches) {
-      if (t.identifier !== joyTouchId) continue;
-      const rect = joystick.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      let dx = t.clientX - cx, dy = t.clientY - cy;
-      const max = rect.width / 2;
-      const dist = Math.hypot(dx, dy);
-      if (dist > max) { dx = dx / dist * max; dy = dy / dist * max; }
-      knob.style.left = (50 + dx / rect.width * 100) + '%';
-      knob.style.top  = (50 + dy / rect.height * 100) + '%';
-      joyDir.x = dx / max; joyDir.y = dy / max;
+      if (t.identifier !== touchTargetId) continue;
+      e.preventDefault();
+      setTouchTarget(t);
+    }
+  }, { passive: false });
+  function endTouch(e) {
+    for (const t of e.changedTouches) {
+      if (t.identifier === touchTargetId) {
+        touchTargetId = null;
+        touchTarget = null;
+      }
     }
   }
-  function handleJoyEnd(e) {
-    for (const t of e.changedTouches) {
-      if (t.identifier !== joyTouchId) continue;
-      joyTouchId = null;
-      joyDir.x = 0; joyDir.y = 0;
-      knob.style.left = '50%'; knob.style.top = '50%';
-    }
+  game.addEventListener('touchend',    endTouch);
+  game.addEventListener('touchcancel', endTouch);
+  // Expose direction-to-target as joyDir, computed each frame from player position
+  const joyDir = { x: 0, y: 0 };
+  function updateTouchDir() {
+    if (!touchTarget) { joyDir.x = 0; joyDir.y = 0; return; }
+    const dx = touchTarget.x - player.x;
+    const dy = touchTarget.y - player.y;
+    const d = Math.hypot(dx, dy);
+    if (d < 22) { joyDir.x = 0; joyDir.y = 0; return; } // close enough -> stop
+    joyDir.x = dx / d;
+    joyDir.y = dy / d;
   }
   const kickBtn = document.getElementById('kick-btn');
   kickBtn.addEventListener('touchstart', (e) => { e.preventDefault(); state.kicking = true; keys[' '] = true; });
   kickBtn.addEventListener('touchend',   (e) => { e.preventDefault(); keys[' '] = false; releaseKick(); });
+  const jumpBtn = document.getElementById('jump-btn');
+  jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); tryJump(); });
 
   document.getElementById('shop-btn').addEventListener('click', toggleShop);
   document.getElementById('close-shop').addEventListener('click', toggleShop);
@@ -1558,7 +1607,9 @@
   // Update button icon when fullscreen state changes, and resize the field
   function onFsChange() {
     const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-    document.getElementById('fs-btn').textContent = fsEl ? '⤢' : '⛶';
+    document.getElementById('fs-btn').innerHTML = fsEl
+      ? '<span>⤢</span><span>EXIT</span>'
+      : '<span>⛶</span><span>FULL</span>';
     // Force a resize so the field markings re-draw at the new dimensions
     setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
   }
@@ -2052,6 +2103,7 @@
 
   // ----- PLAYER MOVEMENT -----
   function updatePlayer(dt) {
+    updateTouchDir();
     if (player.sentOff) {
       // Player can't play — just sit on the sideline
       player.vx = 0; player.vy = 0;
@@ -3121,6 +3173,16 @@
     el.style.top  = p.y + 'px';
   }
   function render() {
+    // Touch-to-move indicator
+    const ttEl = document.getElementById('touch-target');
+    if (touchTarget && ttEl) {
+      ttEl.classList.add('show');
+      ttEl.style.left = touchTarget.x + 'px';
+      ttEl.style.top  = touchTarget.y + 'px';
+    } else if (ttEl) {
+      ttEl.classList.remove('show');
+    }
+
     placeEntity(playerEl, player);
     playerEl.classList.toggle('has-ball', !!player.hasBall);
     // Lift player visually when jumping
@@ -3153,16 +3215,203 @@
       torso: '#75aadb', sleeve: '#75aadb', gkTorso: '#1a1a1a',
       shorts: '#1a1a1a', sock: '#75aadb', sockBand: '#ffffff',
       numberColor: '#ffffff', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.6)',
-      stripes: true,    // light blue + white vertical stripes
+      stripes: true,
       label: 'ARGENTINA', short: 'ARG',
+      flagCss: "radial-gradient(circle at center, #f4c542 0 8px, transparent 9px), linear-gradient(180deg, #75aadb 0 33.3%, #ffffff 33.3% 66.6%, #75aadb 66.6% 100%)",
     },
     portugal: {
       torso: '#a3132c', sleeve: '#1c5b2c', gkTorso: '#f4c542',
       shorts: '#1c5b2c', sock: '#a3132c', sockBand: '#f4c542',
       numberColor: '#f4c542', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.6)',
       label: 'PORTUGAL', short: 'POR',
+      flagCss: "linear-gradient(90deg, #1c5b2c 0 40%, #a3132c 40% 100%)",
+    },
+    france: {
+      torso: '#1d3a8a', sleeve: '#1d3a8a', gkTorso: '#ffeb3b',
+      shorts: '#f5f5f5', sock: '#d22030', sockBand: '#ffffff',
+      numberColor: '#ffffff', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.6)',
+      label: 'FRANCE', short: 'FRA',
+      flagCss: "linear-gradient(90deg, #1d3a8a 0 33.3%, #ffffff 33.3% 66.6%, #d22030 66.6% 100%)",
+    },
+    spain: {
+      torso: '#c1112f', sleeve: '#c1112f', gkTorso: '#f4c542',
+      shorts: '#1d3a8a', sock: '#1d3a8a', sockBand: '#f4c542',
+      numberColor: '#f4c542', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.6)',
+      label: 'SPAIN', short: 'ESP',
+      flagCss: "linear-gradient(180deg, #c1112f 0 25%, #f4c542 25% 75%, #c1112f 75% 100%)",
+    },
+    brazil: {
+      torso: '#f9c91c', sleeve: '#1f6b3e', gkTorso: '#1f6b3e',
+      shorts: '#1d3a8a', sock: '#f9c91c', sockBand: '#1f6b3e',
+      numberColor: '#1f6b3e', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 2px rgba(255,255,255,0.5)',
+      label: 'BRAZIL', short: 'BRA',
+      flagCss: "linear-gradient(180deg, #1f6b3e 0 100%)",
+    },
+    germany: {
+      torso: '#ffffff', sleeve: '#000000', gkTorso: '#d22030',
+      shorts: '#000000', sock: '#ffffff', sockBand: '#d22030',
+      numberColor: '#000000', numberShadow: '0 1px 0 rgba(255,255,255,0.85), 0 0 2px rgba(0,0,0,0.6)',
+      label: 'GERMANY', short: 'GER',
+      flagCss: "linear-gradient(180deg, #000000 0 33.3%, #d22030 33.3% 66.6%, #f9c91c 66.6% 100%)",
+    },
+    england: {
+      torso: '#ffffff', sleeve: '#1a4ba8', gkTorso: '#7cb342',
+      shorts: '#1a4ba8', sock: '#ffffff', sockBand: '#d22030',
+      numberColor: '#1a4ba8', numberShadow: '0 1px 0 rgba(255,255,255,0.85), 0 0 2px rgba(0,0,0,0.5)',
+      label: 'ENGLAND', short: 'ENG',
+      flagCss: "linear-gradient(#ffffff, #ffffff), linear-gradient(#d22030, #d22030)",
+    },
+    italy: {
+      torso: '#1d3a8a', sleeve: '#1d3a8a', gkTorso: '#7cb342',
+      shorts: '#ffffff', sock: '#1d3a8a', sockBand: '#ffffff',
+      numberColor: '#f4c542', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.6)',
+      label: 'ITALY', short: 'ITA',
+      flagCss: "linear-gradient(90deg, #1f6b3e 0 33.3%, #ffffff 33.3% 66.6%, #d22030 66.6% 100%)",
+    },
+    netherlands: {
+      torso: '#ee7d11', sleeve: '#ee7d11', gkTorso: '#1d3a8a',
+      shorts: '#000000', sock: '#ee7d11', sockBand: '#000000',
+      numberColor: '#000000', numberShadow: '0 1px 0 rgba(255,255,255,0.85), 0 0 2px rgba(0,0,0,0.5)',
+      label: 'NETHERLANDS', short: 'NED',
+      flagCss: "linear-gradient(180deg, #d22030 0 33.3%, #ffffff 33.3% 66.6%, #1d3a8a 66.6% 100%)",
+    },
+    croatia: {
+      torso: '#ffffff', sleeve: '#d22030', gkTorso: '#1d3a8a',
+      shorts: '#1a1a1a', sock: '#ffffff', sockBand: '#d22030',
+      numberColor: '#d22030', numberShadow: '0 1px 0 rgba(255,255,255,0.95), 0 0 2px rgba(0,0,0,0.4)',
+      checkerboard: true,
+      label: 'CROATIA', short: 'CRO',
+      flagCss: "linear-gradient(180deg, #d22030 0 33.3%, #ffffff 33.3% 66.6%, #1d3a8a 66.6% 100%)",
+    },
+    usa: {
+      torso: '#ffffff', sleeve: '#bf0a30', gkTorso: '#002868',
+      shorts: '#002868', sock: '#ffffff', sockBand: '#bf0a30',
+      numberColor: '#002868', numberShadow: '0 1px 0 rgba(255,255,255,0.85), 0 0 2px rgba(0,0,0,0.5)',
+      label: 'USA', short: 'USA',
+      flagCss: "linear-gradient(180deg, #bf0a30 0 7.7%, #ffffff 7.7% 15.4%, #bf0a30 15.4% 23.1%, #ffffff 23.1% 30.8%, #bf0a30 30.8% 38.5%, #ffffff 38.5% 46.2%, #bf0a30 46.2% 53.9%, #ffffff 53.9% 61.6%, #bf0a30 61.6% 69.3%, #ffffff 69.3% 77%, #bf0a30 77% 84.7%, #ffffff 84.7% 92.4%, #bf0a30 92.4% 100%), linear-gradient(#002868, #002868)",
+    },
+    // === CLUB TEAMS ===
+    realmadrid: {
+      torso: '#ffffff', sleeve: '#ffffff', gkTorso: '#1a1a1a',
+      shorts: '#ffffff', sock: '#ffffff', sockBand: '#5a3e0a',
+      numberColor: '#5a3e0a', numberShadow: '0 1px 0 rgba(255,255,255,0.95), 0 0 2px rgba(0,0,0,0.4)',
+      label: 'REAL MADRID', short: 'RMA',
+      flagCss: "radial-gradient(circle at center, #5a3e0a 0 12px, transparent 13px), linear-gradient(#ffffff, #ffffff)",
+    },
+    barcelona: {
+      torso: '#a50044', sleeve: '#1d3a8a', gkTorso: '#f9c91c',
+      shorts: '#1d3a8a', sock: '#a50044', sockBand: '#f9c91c',
+      numberColor: '#f9c91c', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.6)',
+      stripes: true, stripesColorA: '#a50044', stripesColorB: '#1d3a8a',
+      label: 'BARCELONA', short: 'BAR',
+      flagCss: "repeating-linear-gradient(90deg, #a50044 0 10px, #1d3a8a 10px 20px)",
+    },
+    mancity: {
+      torso: '#6cabdd', sleeve: '#6cabdd', gkTorso: '#1a1a1a',
+      shorts: '#ffffff', sock: '#6cabdd', sockBand: '#ffffff',
+      numberColor: '#ffffff', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.5)',
+      label: 'MAN CITY', short: 'MCI',
+      flagCss: "linear-gradient(#6cabdd, #6cabdd)",
+    },
+    manunited: {
+      torso: '#da291c', sleeve: '#da291c', gkTorso: '#1a8a4a',
+      shorts: '#ffffff', sock: '#1a1a1a', sockBand: '#f9c91c',
+      numberColor: '#f9c91c', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.6)',
+      label: 'MAN UNITED', short: 'MUN',
+      flagCss: "linear-gradient(#da291c, #da291c)",
+    },
+    liverpool: {
+      torso: '#c8102e', sleeve: '#c8102e', gkTorso: '#1a8a4a',
+      shorts: '#c8102e', sock: '#c8102e', sockBand: '#ffffff',
+      numberColor: '#ffffff', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.5)',
+      label: 'LIVERPOOL', short: 'LIV',
+      flagCss: "linear-gradient(#c8102e, #c8102e)",
+    },
+    chelsea: {
+      torso: '#034694', sleeve: '#034694', gkTorso: '#7cb342',
+      shorts: '#034694', sock: '#ffffff', sockBand: '#034694',
+      numberColor: '#ffffff', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.5)',
+      label: 'CHELSEA', short: 'CHE',
+      flagCss: "linear-gradient(#034694, #034694)",
+    },
+    arsenal: {
+      torso: '#ef0107', sleeve: '#ffffff', gkTorso: '#f9c91c',
+      shorts: '#ffffff', sock: '#ef0107', sockBand: '#ffffff',
+      numberColor: '#ffffff', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.5)',
+      label: 'ARSENAL', short: 'ARS',
+      flagCss: "linear-gradient(90deg, #ef0107 0 70%, #ffffff 70% 100%)",
+    },
+    bayern: {
+      torso: '#dc052d', sleeve: '#dc052d', gkTorso: '#1a8a4a',
+      shorts: '#dc052d', sock: '#dc052d', sockBand: '#ffffff',
+      numberColor: '#ffffff', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.5)',
+      label: 'BAYERN', short: 'BAY',
+      flagCss: "linear-gradient(#dc052d, #dc052d)",
+    },
+    psg: {
+      torso: '#004170', sleeve: '#004170', gkTorso: '#f9c91c',
+      shorts: '#004170', sock: '#004170', sockBand: '#dc052d',
+      numberColor: '#ffffff', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.5)',
+      label: 'PSG', short: 'PSG',
+      flagCss: "linear-gradient(90deg, #004170 0 35%, #dc052d 35% 65%, #004170 65% 100%), linear-gradient(#ffffff, #ffffff)",
+    },
+    juventus: {
+      torso: '#ffffff', sleeve: '#1a1a1a', gkTorso: '#f9c91c',
+      shorts: '#ffffff', sock: '#1a1a1a', sockBand: '#ffffff',
+      numberColor: '#1a1a1a', numberShadow: '0 1px 0 rgba(255,255,255,0.85), 0 0 2px rgba(0,0,0,0.4)',
+      stripes: true, stripesColorA: '#1a1a1a', stripesColorB: '#ffffff',
+      label: 'JUVENTUS', short: 'JUV',
+      flagCss: "repeating-linear-gradient(90deg, #1a1a1a 0 10px, #ffffff 10px 20px)",
+    },
+    intermilan: {
+      torso: '#000000', sleeve: '#000000', gkTorso: '#f9c91c',
+      shorts: '#000000', sock: '#000000', sockBand: '#0068a8',
+      numberColor: '#0068a8', numberShadow: '0 1px 0 rgba(255,255,255,0.85), 0 0 2px rgba(0,0,0,0.5)',
+      stripes: true, stripesColorA: '#000000', stripesColorB: '#0068a8',
+      label: 'INTER MILAN', short: 'INT',
+      flagCss: "repeating-linear-gradient(90deg, #000000 0 10px, #0068a8 10px 20px)",
+    },
+    acmilan: {
+      torso: '#a50034', sleeve: '#1a1a1a', gkTorso: '#1a8a4a',
+      shorts: '#ffffff', sock: '#1a1a1a', sockBand: '#a50034',
+      numberColor: '#ffffff', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.5)',
+      stripes: true, stripesColorA: '#a50034', stripesColorB: '#1a1a1a',
+      label: 'AC MILAN', short: 'MIL',
+      flagCss: "repeating-linear-gradient(90deg, #a50034 0 10px, #1a1a1a 10px 20px)",
+    },
+    sounders: {
+      torso: '#5d9741', sleeve: '#1e3a5f', gkTorso: '#ffeb3b',
+      shorts: '#1e3a5f', sock: '#5d9741', sockBand: '#1e3a5f',
+      numberColor: '#ffffff', numberShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.5)',
+      label: 'SOUNDERS', short: 'SEA',
+      flagCss: "linear-gradient(90deg, #5d9741 0 70%, #1e3a5f 70% 100%)",
+    },
+    lagalaxy: {
+      torso: '#ffffff', sleeve: '#002b5c', gkTorso: '#fdb913',
+      shorts: '#002b5c', sock: '#ffffff', sockBand: '#fdb913',
+      numberColor: '#002b5c', numberShadow: '0 1px 0 rgba(255,255,255,0.85), 0 0 2px rgba(0,0,0,0.5)',
+      label: 'LA GALAXY', short: 'LAG',
+      flagCss: "linear-gradient(115deg, #ffffff 30%, #fdb913 30%, #fdb913 33%, #002b5c 33%, #002b5c 50%, #fdb913 50%, #fdb913 53%, #ffffff 53%)",
+    },
+    inter_miami: {
+      torso: '#f7b5cd', sleeve: '#1a1a1a', gkTorso: '#1a1a1a',
+      shorts: '#1a1a1a', sock: '#f7b5cd', sockBand: '#1a1a1a',
+      numberColor: '#1a1a1a', numberShadow: '0 1px 0 rgba(255,255,255,0.85), 0 0 2px rgba(0,0,0,0.5)',
+      label: 'INTER MIAMI', short: 'MIA',
+      flagCss: "linear-gradient(90deg, #f7b5cd 0 60%, #1a1a1a 60% 100%)",
     },
   };
+  // Categorize teams so picker only matches country↔country or club↔club
+  const COUNTRY_TEAMS = ['argentina','portugal','france','spain','brazil','germany','england','italy','netherlands','croatia','usa'];
+  const CLUB_TEAMS    = ['realmadrid','barcelona','mancity','manunited','liverpool','chelsea','arsenal','bayern','psg','juventus','intermilan','acmilan','sounders','lagalaxy','inter_miami'];
+  function pickTwoRandomCountries() {
+    // 50/50 between countries and clubs each roll
+    const pool = Math.random() < 0.5 ? COUNTRY_TEAMS : CLUB_TEAMS;
+    const a = pool[Math.floor(Math.random() * pool.length)];
+    let b = a;
+    while (b === a) b = pool[Math.floor(Math.random() * pool.length)];
+    return [a, b];
+  }
   function applyKits() {
     const you = KITS[state.youCountry];
     const cpu = KITS[state.cpuCountry];
@@ -3173,6 +3422,12 @@
       css += `#player .torso, #you-mid .torso {
         background-color: ${you.torso};
         background-image: repeating-linear-gradient(90deg, ${you.torso} 0 7px, #ffffff 7px 14px);
+      }`;
+    } else if (you.checkerboard) {
+      css += `#player .torso, #you-mid .torso {
+        background-color: ${you.torso};
+        background-image: repeating-conic-gradient(#d22030 0 25%, #ffffff 0 50%);
+        background-size: 10px 10px;
       }`;
     } else if (state.youCountry === 'portugal') {
       css += `#player .torso, #you-mid .torso {
@@ -3194,6 +3449,12 @@
       css += `#cpu-striker .torso, #cpu-mid .torso {
         background-color: ${cpu.torso};
         background-image: repeating-linear-gradient(90deg, ${cpu.torso} 0 7px, #ffffff 7px 14px);
+      }`;
+    } else if (cpu.checkerboard) {
+      css += `#cpu-striker .torso, #cpu-mid .torso {
+        background-color: ${cpu.torso};
+        background-image: repeating-conic-gradient(#d22030 0 25%, #ffffff 0 50%);
+        background-size: 10px 10px;
       }`;
     } else if (state.cpuCountry === 'portugal') {
       // Portugal: red shirt with green/gold trim
@@ -3231,16 +3492,38 @@
   function bannerYou(text)  { return text.replace('FRANCE', KITS[state.youCountry].label).replace('SPAIN', KITS[state.youCountry].label); }
   function bannerCpu(text)  { return text.replace('FRANCE', KITS[state.cpuCountry].label).replace('SPAIN', KITS[state.cpuCountry].label); }
 
-  document.querySelectorAll('#team-picker .tp-team').forEach(el => {
-    el.addEventListener('click', () => {
-      const pick = el.dataset.team;
-      state.youCountry = pick;
-      state.cpuCountry = (pick === 'argentina') ? 'portugal' : 'argentina';
-      state.awaitingTeamPick = false;
-      applyKits();
-      document.getElementById('team-picker').classList.add('hide');
-    });
+  // Render two random teams in the picker; user clicks one to play as it
+  let matchupPair = pickTwoRandomCountries();
+  function renderTeamPicker() {
+    const [a, b] = matchupPair;
+    const ka = KITS[a], kb = KITS[b];
+    document.getElementById('tp-vs').textContent = `${ka.label}  vs  ${kb.label}`;
+    const opts = document.getElementById('tp-options');
+    opts.innerHTML = '';
+    for (const country of matchupPair) {
+      const k = KITS[country];
+      const div = document.createElement('div');
+      div.className = 'tp-team';
+      div.dataset.team = country;
+      div.innerHTML = `
+        <div class="flag" style="background-image:${k.flagCss};background-size:cover"></div>
+        <div class="name">${k.label}</div>
+      `;
+      div.addEventListener('click', () => {
+        state.youCountry = country;
+        state.cpuCountry = (country === matchupPair[0]) ? matchupPair[1] : matchupPair[0];
+        state.awaitingTeamPick = false;
+        applyKits();
+        document.getElementById('team-picker').classList.add('hide');
+      });
+      opts.appendChild(div);
+    }
+  }
+  document.getElementById('tp-reroll').addEventListener('click', () => {
+    matchupPair = pickTwoRandomCountries();
+    renderTeamPicker();
   });
+  renderTeamPicker();
 
   // ============ INIT ============
   loadGame();        // restore coins, gems, and owned passes from previous sessions
